@@ -18,5 +18,7 @@ for(const file of files){
 }
 const index=Buffer.concat(central),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50,0);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(index.length,12);end.writeUInt32LE(offset,16);
 const bytes=Buffer.concat([...records,index,end]),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json')));
-fs.mkdirSync(out,{recursive:true});const file=path.join(out,`PI-bot-${manifest.version}.piplug`);fs.writeFileSync(file,bytes);
-const report={file,size:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex'),files:files.map(f=>f.name)};fs.writeFileSync(path.join(out,'package-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({file,size:report.size,sha256:report.sha256,fileCount:files.length},null,2));
+fs.mkdirSync(out,{recursive:true});const file=path.join(out,`${manifest.id}-${manifest.version}.piplug`);fs.writeFileSync(file,bytes);
+// Preserve update discovery for installed 0.3.79, which expects the old asset name.
+const legacyFile=path.join(out,`PI-bot-${manifest.version}.piplug`);fs.writeFileSync(legacyFile,bytes);
+const report={file,legacyFile,size:bytes.length,sha256:crypto.createHash('sha256').update(bytes).digest('hex'),files:files.map(f=>f.name)};fs.writeFileSync(path.join(out,'package-report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({file,size:report.size,sha256:report.sha256,fileCount:files.length},null,2));

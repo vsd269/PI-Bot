@@ -18,8 +18,8 @@ function releaseInfo(release,current){
   if(!v||v.pre||release.draft||release.prerelease)throw Error('发布信息不完整。');
   const tag=release.tag_name,notes=REPO+'/releases/tag/'+tag;
   if(release.html_url!==notes)throw Error('发布地址不匹配。');
-  const name='PI-bot-'+v.text+'.piplug';
-  const asset=(release.assets||[]).find(a=>a.name===name&&a.state==='uploaded'&&a.size>0&&a.browser_download_url===REPO+'/releases/download/'+tag+'/'+name);
+  const names=['local.ds-bot-'+v.text+'.piplug','PI-bot-'+v.text+'.piplug'];
+  const asset=names.map(name=>(release.assets||[]).find(a=>a.name===name&&a.state==='uploaded'&&a.size>0&&a.browser_download_url===REPO+'/releases/download/'+tag+'/'+name)).find(Boolean);
   if(!asset)throw Error('此版本尚未提供可安装的插件包。');
   return {status:newer(v.text,current)?'available':'current',current,latest:v.text,releaseUrl:notes,downloadUrl:asset.browser_download_url};
 }

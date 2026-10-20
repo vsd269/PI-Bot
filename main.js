@@ -78,7 +78,7 @@ async function onPanelInvoke(channel,input={}){
     case 'team.secret.delete': return team.vault.remove(input);
     case 'team.secret.export': return team.vault.export(input);
     case 'team.secret.transfer': return team.vault.transfer(input);
-    case 'team.secret.import': return team.vault.import(input);
+    case 'team.secret.import': return team.vault.importTransfer(input);
     case 'team.recovery': return team.recovery.operation(input);
     case 'team.capabilities': return team.capabilities.view();
     case 'team.capability.save': return team.capabilities.save(input);

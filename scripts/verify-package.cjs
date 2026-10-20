@@ -1,7 +1,7 @@
 'use strict';
 // Validate the actual STORE ZIP, CRCs and source checksums without dependencies.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const root=path.resolve(__dirname,'..'),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))),file=path.join(root,'dist',`PI-bot-${manifest.version}.piplug`),bytes=fs.readFileSync(file),entries=new Map();
+const root=path.resolve(__dirname,'..'),manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.json'))),file=path.join(root,'dist',`${manifest.id}-${manifest.version}.piplug`),bytes=fs.readFileSync(file),entries=new Map();
 const table=Array.from({length:256},(_,n)=>{for(let i=0;i<8;i++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 function crc(data){let n=0xffffffff;for(const b of data)n=table[(n^b)&255]^(n>>>8);return(n^0xffffffff)>>>0;}
 let at=0;
@@ -14,5 +14,6 @@ const checks=JSON.parse(entries.get('checksums.json')).files;
 for(const [name,hash] of Object.entries(checks)){assert(entries.has(name),name);assert.equal(crypto.createHash('sha256').update(entries.get(name)).digest('hex'),hash,name);assert.deepEqual(entries.get(name),fs.readFileSync(path.join(root,name)),name);}
 assert.equal(entries.size,Object.keys(checks).length+1);assert.equal(JSON.parse(entries.get('manifest.json')).version,manifest.version);
 const sha256=crypto.createHash('sha256').update(bytes).digest('hex');
-fs.writeFileSync(path.join(root,'dist','SHA256SUMS.txt'),`${sha256}  ${path.basename(file)}\n`);
+const legacy=path.join(root,'dist',`PI-bot-${manifest.version}.piplug`);assert.deepEqual(fs.readFileSync(legacy),bytes,'Legacy update asset must contain identical bytes');
+fs.writeFileSync(path.join(root,'dist','SHA256SUMS.txt'),`${sha256}  ${path.basename(file)}\n${sha256}  ${path.basename(legacy)}\n`);
 console.log(JSON.stringify({version:manifest.version,files:entries.size,verifiedFiles:Object.keys(checks).length,bytes:bytes.length,sha256},null,2));

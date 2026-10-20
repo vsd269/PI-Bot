@@ -10,6 +10,13 @@ test('offers only complete stable releases with an own-repository package',()=>{
  assert.equal(releaseInfo(release(),'0.3.79').status,'available');assert.equal(releaseInfo(release('0.3.78'),'0.3.79').status,'current');
  for(const mutate of [r=>r.draft=true,r=>r.prerelease=true,r=>r.html_url='https://evil.test',r=>r.assets=[],r=>r.assets[0].browser_download_url='https://evil.test/install.piplug',r=>r.assets[0].size=0,r=>r.assets[0].state='new',r=>r.tag_name='v0.3.80-beta']){const r=release();mutate(r);assert.throws(()=>releaseInfo(r,'0.3.79'));}
 });
+test('canonical marketplace asset is preferred while older Releases remain readable',()=>{
+ const old=release(),canonical=structuredClone(old.assets[0]);canonical.name='local.ds-bot-0.3.80.piplug';canonical.browser_download_url=repo+'/releases/download/v0.3.80/'+canonical.name;
+ assert(releaseInfo(old,'0.3.79').downloadUrl.endsWith('/PI-bot-0.3.80.piplug'));
+ old.assets.push(canonical);assert(releaseInfo(old,'0.3.79').downloadUrl.endsWith('/local.ds-bot-0.3.80.piplug'));
+ old.assets=[canonical];assert.equal(releaseInfo(old,'0.3.79').status,'available');
+ canonical.browser_download_url='https://evil.test/'+canonical.name;assert.throws(()=>releaseInfo(old,'0.3.79'));
+});
 test('concurrent callers share a bounded public request and six-hour cache',async()=>{
  let count=0,finish,clock=0;
  const checker=createUpdateChecker({current:'0.3.79',now:()=>clock,fetchJSON:async(url,options,max)=>{count++;assert.equal(url,'https://api.github.com/repos/vsd269/PI-Bot/releases/latest');assert.equal(options.timeoutMs,8000);assert(!options.headers.Authorization);assert.equal(max,512*1024);await new Promise(r=>finish=r);return release();}});

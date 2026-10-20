@@ -17,7 +17,7 @@ PI Bot is an independently maintained adaptation of [DeepSeek-Bot](https://githu
 ## Install
 
 1. Install [PI Desktop](https://github.com/vsd269/PI-Desktop) and configure an available model.
-2. Download `PI-bot-VERSION.piplug` from [Releases](https://github.com/vsd269/PI-Bot/releases/latest).
+2. Download `local.ds-bot-VERSION.piplug` from [Releases](https://github.com/vsd269/PI-Bot/releases/latest).
 3. Install the local package in PI Desktop's plugin manager, review permissions and restart the client.
 4. Open **PI Bot** and create your Bots or groups.
 
@@ -56,4 +56,6 @@ Code is distributed under [Apache License 2.0](LICENSE). This repository does no
 
 Starting with 0.3.79, an open PI Bot page checks this repository's public stable GitHub Releases in the background. New versions appear in the sidebar; Settings → About provides manual checks, release notes and package downloads. Automatic checking can be disabled. Successful checks are cached for six hours; failures are shown honestly and can be retried.
 
-Download the `.piplug`, import it in PI Desktop's plugin manager, then restart. This does not silently replace running plugins. Versions before 0.3.79 need one manual upgrade to acquire this feature. No connector token is sent to the release API. Publishers must create a non-draft, non-prerelease Release with a matching `PI-bot-X.Y.Z.piplug` asset and a higher version.
+Download the `.piplug`, import it in PI Desktop's plugin manager, then restart. This does not silently replace running plugins. Versions before 0.3.79 need one manual upgrade to acquire this feature. No connector token is sent to the release API. Publishers must create a non-draft, non-prerelease Release with a matching `local.ds-bot-X.Y.Z.piplug` asset and a higher version.
+
+For the plugin center upload, use the canonical `local.ds-bot-VERSION.piplug`. The identically sized and hashed `PI-bot-VERSION.piplug` release asset is kept solely for 0.3.79 update discovery. `npm run preflight:market` checks the specific filename and dynamic-import patterns encountered during submission; it does not replace the platform's full review.

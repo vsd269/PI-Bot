@@ -36,7 +36,7 @@ PI Bot 是基于 [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习�
 ## 安装
 
 1. 安装 [PI Desktop](https://github.com/vsd269/PI-Desktop)，配置可用的模型。
-2. 从 [Releases](https://github.com/vsd269/PI-Bot/releases/latest) 下载 `PI-bot-版本号.piplug`。
+2. 从 [Releases](https://github.com/vsd269/PI-Bot/releases/latest) 下载 `local.ds-bot-版本号.piplug`。
 3. 在 PI Desktop 的插件管理页选择从本地安装插件包，检查并授予所需权限。
 4. 重启 PI Desktop，打开 **PI Bot**，创建 Bot 和群聊。
 
@@ -50,7 +50,11 @@ PI Bot 是基于 [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习�
 
 更新流程是 **收到提醒 → 下载 .piplug → 在 PI Desktop 插件管理中导入 → 重启**，不会静默替换运行中的插件。0.3.78 及更早版本需要先手动安装一次带检查功能的版本。自动检查只在 PI Bot 页面运行时进行，正常结果缓存 6 小时；离线或 GitHub 限流时不会误报“已是最新”。检查只访问公开 Releases API，不使用用户的 GitHub 连接器令牌。
 
-维护者发布时，`manifest.json`、`package.json`、Git 标签和包名需对应同一个更高版本；创建 **非草稿、非预发布** 的 Release，并附上 `PI-bot-X.Y.Z.piplug`。仅推送源码或创建没有安装包的标签不会触发可安装更新提示。
+维护者发布时，`manifest.json`、`package.json`、Git 标签和包名需对应同一个更高版本；创建 **非草稿、非预发布** 的 Release，并附上 `local.ds-bot-X.Y.Z.piplug`。仅推送源码或创建没有安装包的标签不会触发可安装更新提示。
+
+上传插件中心时，选择 `local.ds-bot-版本号.piplug`，文件名必须与插件 ID 和版本一致。GitHub 同时保留内容相同的 `PI-bot-版本号.piplug` 兼容附件，供 0.3.79 的更新检测使用；它不用于插件中心上传。关于页名称仍为 PI Bot，安装 ID 不变。
+
+`npm run preflight:market` 对照已遇到的文件名和动态导入提示做本地检查，不代表已经通过平台完整审核。
 
 ## 使用与边界
 
@@ -74,7 +78,7 @@ npm run package
 npm run verify:package
 ```
 
-产物位于 `dist/PI-bot-版本号.piplug`，校验值位于 `dist/SHA256SUMS.txt`。`.piplug` 使用 PI 安装器需要的 ZIP STORE 格式；不要直接改用普通压缩包代替。
+产物位于 `dist/local.ds-bot-版本号.piplug`，校验值位于 `dist/SHA256SUMS.txt`。`.piplug` 使用 PI 安装器需要的 ZIP STORE 格式；不要直接改用普通压缩包代替。
 
 ```text
 renderer/   插件界面、交互与来源记录

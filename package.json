@@ -1,6 +1,6 @@
 {
   "name": "pi-bot-desktop",
-  "version": "0.3.79",
+  "version": "0.3.80",
   "private": true,
   "description": "DeepSeek-Bot adaptation for PI Desktop: persistent bots, group collaboration, memory and skills.",
   "license": "Apache-2.0",
@@ -11,8 +11,9 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "check": "node scripts/check.cjs",
-    "test": "node --test tests/regression.cjs tests/capability-regression.cjs tests/preferences-regression.cjs tests/project-metadata.cjs tests/updates.cjs",
+    "test": "node --test tests/regression.cjs tests/capability-regression.cjs tests/preferences-regression.cjs tests/project-metadata.cjs tests/updates.cjs tests/vault-transfer.cjs",
     "package": "node scripts/package.cjs",
+    "preflight:market": "node scripts/market-preflight.cjs",
     "verify:package": "node scripts/verify-package.cjs"
   }
 }
