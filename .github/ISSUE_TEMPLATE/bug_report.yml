@@ -1,0 +1,21 @@
+name: 问题反馈 / Bug report
+description: 报告 PI Bot 的可复现问题。
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: PI Bot / PI Desktop 版本与操作系统
+      placeholder: PI Bot 0.3.78, PI Desktop 0.20.1, Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤、预期结果和实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 截图或经过检查的诊断信息
+      description: 请先删除 API Key、令牌、账号信息、聊天隐私和本地敏感路径。

@@ -1,0 +1,5 @@
+# Preserve source bytes so packages have the same checksums on every platform.
+* -text
+*.png binary
+*.jpg binary
+*.webp binary

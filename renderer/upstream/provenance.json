@@ -1,0 +1,93 @@
+{
+  "repository": "https://github.com/FeiZhuLulu/DeepSeek-Bot",
+  "commit": "d56c5850847b828dbc93e232fefcb81a94f80c89",
+  "files": [
+    "styles.js",
+    "motion.js",
+    "characters.js",
+    "inks.js",
+    "icons.js"
+  ],
+  "adaptation": "Style scope and module extensions only. PI layout uses original bt-* classes and composer structure.",
+  "audit": {
+    "date": "2026-10-13",
+    "repository": "https://github.com/FeiZhuLulu/DeepSeek-Bot",
+    "commit": "7e1c5184d63e796def85469793117befbbe5003f",
+    "localDownloadVersion": "0.1.3",
+    "newModules": [
+      {
+        "path": "src/upstream/mentions.mjs",
+        "source": "ds-bot/src/shared/mentions.js",
+        "adaptation": "ES module extension"
+      },
+      {
+        "path": "renderer/upstream/mentions.mjs",
+        "source": "ds-bot/src/shared/mentions.js",
+        "adaptation": "ES module extension"
+      },
+      {
+        "path": "renderer/upstream/themes.mjs",
+        "source": "ds-bot/src/client/themes.js",
+        "adaptation": "Four palettes extracted for PI renderer"
+      }
+    ],
+    "adaptation": "Native PI adapters for memory, capabilities, schedules and runtime tools; see migration report. Prior provenance record retained."
+  },
+  "audit20261014": {
+    "repository": "https://github.com/Fei2411/DeepSeek-Bot",
+    "commit": "20ebc9213cbbde7249d71786765f86be00dc6663",
+    "version": "0.1.5",
+    "adaptation": "Memory fallback and model-key retry; written tool-call patterns; native PI reimplementations described in migration report. Historical provenance retained."
+  },
+  "audit20261016": {
+    "repository": "https://github.com/Fei2411/DeepSeek-Bot",
+    "commit": "9411ac3629f4c0494c7963a371dee703c2cfd7aa",
+    "version": "0.1.6",
+    "basePiBotVersion": "0.3.30",
+    "adaptation": "Native PI implementations of activity display, history tools, discussion posting, settings parameters, consent-gated group permissions, bounded messaging and retryable result delivery. See 0.3.31 migration report for API differences."
+  },
+  "audit0333": {
+    "date": "2026-10-16",
+    "repository": "https://github.com/Fei2411/DeepSeek-Bot",
+    "commit": "9411ac3629f4c0494c7963a371dee703c2cfd7aa",
+    "version": "0.1.6",
+    "localTrackedFilesVerified": 232,
+    "sourceModulesReviewed": 89,
+    "basePiVersion": "0.3.32",
+    "userBaseVersion": "0.3.30",
+    "adaptation": "Native PI question cards, round reports, team creation, archive search and retry protection. Serial/parallel and user UI preserved. Remaining differences are documented in the 0.3.33 report; no full parity claim."
+  },
+  "settings0338": {
+    "source": "User-provided DeepSeek-Bot 0.1.6 source directory",
+    "adaptation": "SettingsDialog DOM structure and original bt-settings/bt-set-* CSS. Usage, About and Feedback exported CSS copied with template constants resolved. PI backend actions replace DSH actions; PI-specific integration content and existing extensions retained.",
+    "referenceSha256": {
+      "settings.js": "885d3c33d8ac6cf314dde3d7a8024424e1d406123ee475704fc5f56279e9c07a",
+      "styles.js": "e9fed55f456f230466e631f6185f88f5148be659080da40f9affd36016bbb91b",
+      "usage-page.js": "7b8f15e08061cfe305879cb0b9d289d1a948ed43a45965cf3872426c257661b2",
+      "about.js": "575e466d0807ab3ac603689f29f57328618af27835feb9fbda6fd6f42df4697b",
+      "feedback.js": "6e6852b790957a405bdfe71bcaab2af396875896cda82231b6c75a95930eab69",
+      "bot-settings.js": "db182d5034a286b86524f9ac16ffaaabdc5dbebf8afbee9db5c15963940b4953",
+      "group-settings.js": "475b104a782913891f36aa12bcd61b06e2841834372e141466e30ac7bed66ffe",
+      "capability-settings.js": "0b8fca3b49f82c6d4a3afe7ea54d36e4d3c1680a0dbbcc9f30aa18edc85c3c28",
+      "secret-card.js": "8039f4b5ac3d4828d7dc3496496476eccb229cafb70def2401123eae9e576531",
+      "connectors.js": "e615e4562078aba993fd5f89aa1545c09d4927e8ad82db551ca10ac188c8bae8",
+      "schedules.js": "e440459ba6fe3c5cabb3136ad81c087a07bcb5a184597b52a7c60fab91446ae2"
+    }
+  },
+  "motion0352": {
+    "date": "2026-10-17",
+    "version": "0.1.7",
+    "license": "Apache-2.0",
+    "source": "User-provided DeepSeek-Bot 0.1.7 client source",
+    "adaptation": "Exact spring math and liveSprings; vanilla equivalents for glide, FLIP, morph and linger. User avatar overrides and native PI boundary documented in release notes.",
+    "referenceSha256": {
+      "motion.js": "aaefb63609a3d96ea0e24a776ca640167d249ebe0c183f318e0518d1893e9764",
+      "composer.js": "94d021524babf1652073807bb0aba93f9aed3aeb2262037cb530868ceb6c373e",
+      "details-drawer.js": "371ba38bc15b257c7dc8fb7a3bec76bb1dc7b0831a3fabae0f9698b3675b6f8d",
+      "new-chat.js": "720f00393e0092cb9813bc2570cb28d8f63bcc49ccc44758b8bd3ef754148eef",
+      "settings.js": "01fd0cd1ed3553d246f723e1720005121872ab43c6bc278d29bc841d1e477965",
+      "member-status.js": "9280d42fcfd496f453aefea7a04cd0477411d7a4c252d7339cc3e6f7fb7f4a7b",
+      "connectors.js": "e615e4562078aba993fd5f89aa1545c09d4927e8ad82db551ca10ac188c8bae8"
+    }
+  }
+}

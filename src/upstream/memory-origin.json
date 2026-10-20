@@ -1,0 +1,8 @@
+{
+  "source": "E:\\\u5b89\u88c5\u5305\\DeepSeek-Bot\\DeepSeek-Bot-main\\DeepSeek-Bot-main\\ds-bot\\src\\host\\memory.js",
+  "sha256": "1d10e6b7e7560282c8a0e355b806e69b80cf8f094530d9805ec7bec6a7333926",
+  "changes": [
+    "Replace DSH-only imports with pure compatibility helpers",
+    "Route oneShot through PI agent.complete; all file, panel, review, tool and snapshot logic retained"
+  ]
+}

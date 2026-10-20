@@ -1,0 +1,46 @@
+const assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const {Team}=require(root+'/src/team');
+const tick=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+ const {createPreferenceSaver}=await import(require('node:url').pathToFileURL(path.join(root,'renderer/preference-saver.mjs')).href);
+ let state={prefs:{appearanceMode:'host',theme:'deepseek'},bots:[{id:'a',chat:[]}]},requests=[],paints=0,boundaries=0;
+ const saver=createPreferenceSaver({getState:()=>state,save:input=>new Promise((resolve,reject)=>requests.push({input,resolve,reject})),onChange:()=>paints++,onBoundary:()=>boundaries++});
+ const first=saver.choose({appearanceMode:'independent',appearance:'dark'});
+ assert.equal(state.prefs.appearance,'dark');assert.equal(requests.length,1);assert.equal(requests[0].input.compact,true);assert.equal(paints,1);
+ state=saver.receive({prefs:{appearanceMode:'host',theme:'deepseek'},bots:[{id:'a',chat:['new message']}]});
+ assert.equal(state.prefs.appearance,'dark');assert.deepEqual(state.bots[0].chat,['new message']);
+ const second=saver.choose({appearance:'light'}),third=saver.choose({appearance:'dark',theme:'moonlight'});
+ requests[0].resolve({prefs:{appearanceMode:'independent',appearance:'dark',theme:'deepseek'}});await first;await tick();
+ assert.equal(requests.length,2);assert.deepEqual(requests[1].input,{appearance:'dark',theme:'moonlight',compact:true});
+ assert.equal(state.prefs.theme,'moonlight');
+ requests[1].resolve({prefs:{appearanceMode:'independent',appearance:'dark',theme:'moonlight'}});await Promise.all([second,third]);
+ state=saver.receive({prefs:{appearanceMode:'host',theme:'deepseek'},bots:[{id:'a',chat:['new message','another']}]});
+ assert.equal(state.prefs.theme,'moonlight');assert.equal(state.prefs.appearance,'dark');
+ state=saver.receive({prefs:{appearanceMode:'independent',appearance:'dark',theme:'moonlight'},bots:[]});
+ state=saver.receive({prefs:{appearanceMode:'independent',appearance:'light',theme:'paper'},bots:[]});
+ assert.equal(state.prefs.appearance,'light');assert.equal(state.prefs.theme,'paper');
+ const failure=saver.choose({appearance:'dark'});requests[2].reject(Error('disk failed'));await assert.rejects(failure,/disk failed/);assert.equal(state.prefs.appearance,'light');
+ const absent=saver.choose({accent:'#123456'});requests[3].reject(Error('disk failed'));await assert.rejects(absent);assert(!Object.hasOwn(state.prefs,'accent'));
+ const earlier=saver.choose({appearance:'dark'}),newer=saver.choose({appearance:'light'});requests[4].reject(Error('old failed'));await assert.rejects(earlier);await tick();assert.equal(state.prefs.appearance,'light');requests[5].resolve({prefs:{...state.prefs}});await newer;
+ saver.close();await assert.rejects(saver.choose({theme:'deepseek'}));assert(boundaries>=10);
+ const {createClient}=await import(require('node:url').pathToFileURL(path.join(root,'renderer/rpc.mjs')).href);
+ let release,entered;const gate=new Promise(r=>entered=r),calls=[];
+ const client=createClient(async(_,{method,args})=>{calls.push({method,args});if(method==='request.start'){if(args.channel==='team.state'){entered();await new Promise(r=>release=r);}return {id:args.channel};}return {chunk:'{}',done:true};});
+ const refresh=client('team.state',{});await gate;const catalog=client('team.models',{}),preference=client('team.prefs',{appearance:'dark',compact:true});release();await Promise.all([refresh,catalog,preference]);assert.equal(calls[1].args.channel,'team.prefs');
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'pibot-prefs-'));
+ try{
+  const team=new Team({});team.file=path.join(dir,'team.json');team.state={version:1,bots:[{id:'a',chat:[{text:'private '.repeat(100000)}]}],rooms:[],jobs:[],prefs:{theme:'deepseek',appearance:'light'}};team.queueCheckpoint=()=>{};
+  team.snapshot=()=>{throw Error('compact preference save must not build full snapshot');};
+  const result=await team.preferences({appearanceMode:'independent',appearance:'dark',compact:true});assert.deepEqual(Object.keys(result),['prefs']);assert(JSON.stringify(result).length<200);
+  assert.equal(JSON.parse(await fs.readFile(team.file,'utf8')).prefs.appearance,'dark');
+  await assert.rejects(team.preferences({theme:'paper',motion:'invalid',compact:true}));assert.equal(team.state.prefs.theme,'deepseek');
+  const goodSave=team.save.bind(team);team.save=async rollback=>{team.state.bots[0].chat.push({text:'concurrent chat'});rollback?.();throw Error('write denied');};
+  await assert.rejects(team.preferences({appearance:'light',compact:true}),/write denied/);assert.equal(team.state.prefs.appearance,'dark');assert.equal(team.state.bots[0].chat.at(-1).text,'concurrent chat');
+  team.save=goodSave;
+  await Promise.all([team.preferences({appearance:'light',compact:true}),team.preferences({appearance:'dark',theme:'paper',compact:true})]);
+  assert.equal(JSON.parse(await fs.readFile(team.file,'utf8')).prefs.appearance,'dark');assert.equal(team.state.prefs.theme,'paper');
+  team.snapshot=()=>({legacy:true});assert.deepEqual(await team.preferences({motion:'quiet'}),{legacy:true});
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+ console.log('PASS: immediate paint, stale refresh protection, rapid choice coalescing, rollback, concurrent chat preservation, durable compact save, validation, serial writes and legacy response.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

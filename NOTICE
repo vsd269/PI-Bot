@@ -1,0 +1,60 @@
+PI-bot is a local adaptation of FeiZhuLulu/DeepSeek-Bot (Apache-2.0).
+Upstream: https://github.com/FeiZhuLulu/DeepSeek-Bot
+Prior renderer source provenance is preserved under renderer/upstream/provenance.json.
+The 2026-10-13 audit compared the user's ds-bot 0.1.3 download and upstream commit 7e1c5184d63e796def85469793117befbbe5003f.
+This version ports mention parsing and four theme palettes and adapts memory, capabilities, scheduling and runtime communication to PI-Desktop.
+Administrator completions have no tools. Groups select serial or parallel workers; each member's native session is serialized.
+Custom PI-bot artwork and launcher/return extension files are retained from the existing local plugin.
+The adapter targets the documented PI-Desktop 0.18 plugin API. Host application files and user data are not bundled or patched.
+DSH-specific features and differences are described in README.zh.md and the migration report.
+
+2026-10-14 audit: Fei2411/DeepSeek-Bot 0.1.5, commit 20ebc9213cbbde7249d71786765f86be00dc6663.
+Ported memory fallback and failed-summary retry from ds-bot/src/host/memory.js; written-tool-call patterns from ds-bot/src/host/turns.js; working folders, bounded handoffs and message backpressure reimplemented for PI.
+
+PI-bot 0.3.23 adds stable member-ID dispatch badges and shared avatar/name mention rendering for the native PI adapter.
+
+2026-10-16 audit: Fei2411/DeepSeek-Bot 0.1.6, commit 9411ac3629f4c0494c7963a371dee703c2cfd7aa. PI-bot 0.3.31 is based on the user's 0.3.30. Native PI implementations add group activity, private/group history tools, discussion posting, settings parameters, consent-gated permissions and reliable bounded delivery. DSH API differences remain documented in the migration report.
+
+2026-10-16 PI-bot 0.3.33 audit: supplied Fei2411/DeepSeek-Bot 0.1.6, commit 9411ac3629f4c0494c7963a371dee703c2cfd7aa; 232 tracked files verified and 89 source modules mapped. Native PI adaptations extend questions, round reports, team creation and archived history. Existing licenses and provenance remain in this package. Known host and UI differences are documented in the 0.3.33 report.
+
+2026-10-17 PI-bot 0.3.43: compared with user-supplied Fei2411/DeepSeek-Bot 0.1.7 source archive. Handoff dependency tracking, file-backed long messages, original voice-chat flow and settings geometry adapted to PI APIs. Added GitHub MCP PAT connector, HTTP ASR provider adapters and original composer/menu placements. No DSH server/Docker or OpenCode transport is bundled. See the 0.3.43 migration notes for verified scope and remaining differences.
+
+2026-10-17 PI-bot 0.3.44: Aliyun speech protocols adapted from official documentation. Includes unmodified ws 8.22.0 from https://registry.npmjs.org/ws/-/ws-8.22.0.tgz under src/vendor/ws (MIT; license retained in src/vendor/ws/LICENSE). Optional native peer dependencies are not bundled or required. No cloud credentials are bundled; cloud recognition has not been tested with a personal account.
+
+2026-10-17 PI-bot 0.3.45: per-Bot speech save-and-use persistence, voice setup recovery and composer action visibility fixes. Unsupported native sidebar entry hidden following upstream availability checks. Existing upstream and bundled dependency licenses retained.
+
+2026-10-17 PI-bot 0.3.46: isolated PI microphone panel with device selection, local level test and bounded WAV transcription bridge; avatar-rail layout and original sidebar glyphs, voice control/glow and composer spacing fixes. Optional native workspace UI adapter uses the existing PI toggle without moving native DOM or patching client files. Upstream and dependency licenses retained.
+
+2026-10-17 PI-bot 0.3.47: original plugin-owned Windows WinMM recording helper (PowerShell/.NET), in-app microphone device settings, level-driven dictation waveform and keyboard controls; scoped native work-panel and window-control palette adaptation. No client binaries or OS privacy settings are changed. Existing upstream and dependency licenses retained. Voice input artwork and waveform are original; no third-party product assets are included.
+
+2026-10-17 PI-bot 0.3.48: original level-envelope interpolation and compositor-transform dictation visualization, capture-phase local Alt+V shortcut with legacy fallback, immediate native work-panel toggle with cached session fallback, and compact original sidebar glyph. Existing upstream/dependency licenses retained. No Claude artwork or client binaries are included or modified.
+
+2026-10-17 PI-bot 0.3.49: original native workspace presentation/route readiness fixes, asynchronous session navigation checks, readable usage model metadata with stable accounting keys, and real heatmap legend swatches. Existing upstream and dependency licenses retained. No client binaries modified.
+
+2026-10-17 PI-bot 0.3.52: spring math and live edge integration copied from user-supplied Fei2411/DeepSeek-Bot 0.1.7 ds-bot/src/client/motion.js (Apache-2.0); React hooks adapted to scoped vanilla DOM controllers. Menu linger, list FLIP, height/width morph, drawer/settings timing and member pill keyframes adapted from that client. Upstream and dependency licenses retained. User-requested gentle avatar click and static contexts preserved; PI native browser/workspace animations remain host-controlled. No client binaries modified.
+
+2026-10-17 PI-bot 0.3.53: administrator star path adapted from user-supplied Fei2411/DeepSeek-Bot 0.1.7 mark.js (Apache-2.0). Original compact sidebar/unread controller, shared encrypted speech configuration, official-protocol Volcengine and Aliyun live ASR transports, plugin-owned WinMM PCM streaming and optional OpenAI-compatible TTS playback. Existing upstream and dependency licenses retained. No client binaries modified.
+
+2026-10-17 PI-bot 0.3.54: read-only native Agent event presentation adapter, in-place streaming bubbles, upstream HeaderPill memory notice timing and click behavior, optical star alignment, and native-consent explanation. Existing upstream memory review architecture and licenses retained. No client binaries modified.
+
+2026-10-17 PI-bot 0.3.55: original playback-owned speech interruption controller, ASR-text playback echo rejection (not acoustic echo cancellation), optional fast headset VAD, microphone lifecycle serialization and shared interruption settings. Existing upstream and dependency licenses retained. No client binaries modified.
+
+2026-10-17 PI-bot 0.3.56: original scoped private-chat bubble color resolver and contrast handling, inspired by the public Grok Bot changelog. Group user bubbles retain the theme; no official group tint rule was verified. Modified adapted stylesheet and General accent description. Existing licenses retained; no client binaries modified.
+
+2026-10-17 PI-bot 0.3.57: original PI-compatible global chat search, local Find with CSS highlights, excerpt and selection quoting inspired by upstream composer.js/palette.js, scoped keyboard shortcuts, active-read acknowledgements, recent local reactions and failed-outbox deletion. Reuses existing adapted upstream palette CSS; see 0.3.57 comparison notes for public documentation and remaining service differences. Existing source/dependency credits retained. No PI client binaries modified.
+
+2026-10-17 PI Bot 0.3.58: 35 original PI companion silhouettes in pi-characters.mjs and pi-avatars-objects.mjs replace the former DS character artwork; the existing PI mascot is unchanged. Legacy saved shape identifiers resolve to new companions. Existing adapted layered-eye renderer, palette, interaction styles and upstream/dependency credits retained. Brand and optical moon alignment updated. No client binaries modified.
+
+2026-10-17 PI Bot 0.3.59: original PI companion family redrawn with the default mascot's rounded shell, pale faceplate and painted navy eyes. Original default mascot retained byte-for-byte. Stable character IDs, themed colours and motion renderer retained; decorative layers clipped to new shells. Added explicit PI blue swatch without changing id-derived colours. Existing upstream and dependency credits retained. No client binaries modified.
+
+2026-10-17 PI Bot 0.3.60: grouped chat find and workspace toggles into a shared header action row with 6px spacing; reserved title space and preserved original avatars. No client binaries modified.
+
+2026-10-18 PI Bot 0.3.61: the 35 companion avatar choices use finished artwork supplied by the user in a 5-by-7 contact sheet. Artwork was cropped, background-masked and normalized onto 256px transparent canvases; original colors and shading are retained, with no generative redraw. No authorship or additional artwork license is asserted by this adapter. The original first/default PI mascot is retained unchanged. Existing shape identifiers and uploaded photo avatars remain supported. Raster avatars retain whole-character interaction motion without synthetic layered eyes. Local image data is bundled for PI renderer protocol compatibility; no client binaries modified. Existing upstream source and bundled dependency credits and licenses remain in effect.
+
+2026-10-18 PI Bot 0.3.62: corrected raster avatar optical sizing by explicitly resizing original transparent cutouts to a 232px footprint on the 256px canvas. Original default mascot and user-supplied artwork designs retained. No client binaries modified.
+
+PI Bot 0.3.78 independent adaptation release.
+Project: https://github.com/vsd269/PI-Bot
+Maintainer of this adaptation: vsd269. Based on Fei2411/DeepSeek-Bot; historical upstream names and source notices above remain unchanged.
+Modified project-facing links in renderer/settings-pages.mjs and manifest.json, and reorganized documentation and portable build/test tooling. Source-derived modules remain adapted for PI Desktop; see renderer/upstream/provenance.json for origin records.
+This is an independently maintained adaptation, not an official upstream release. Original Apache-2.0 terms and the MIT license of bundled ws remain in force.

@@ -1,0 +1,39 @@
+import {el} from './dom.mjs';
+const button=(text,run)=>{const b=el('button',text,'soft-button');b.type='button';b.onclick=async()=>{if(b.disabled)return;b.disabled=true;try{await run();}finally{if(b.isConnected)b.disabled=false;}};return b;};
+const label=(text,control)=>{const l=el('label',text);l.append(control);return l;};
+const field=(placeholder,type='text')=>{const i=el('input');i.placeholder=placeholder;i.type=type;return i;};
+export function createAdvanced({body,show,call,getState,notice,download,isCurrent}){
+  const safe=run=>async()=>{try{await run();}catch(error){notice(error.message||'操作失败。');}};
+  const info=text=>body.append(el('p',text,'feature-note'));
+  const bots=(id)=>{const s=el('select');s.setAttribute('aria-label','选择 Bot');for(const b of getState().bots){const o=el('option',b.name);o.value=b.id;s.append(o);}if(id)s.value=id;return s;};
+  async function secrets(botId){
+    show('Bot 密钥管理');const target=bots(botId);body.append(label('Bot',target));target.onchange=safe(()=>secrets(target.value));
+    const id=target.value,view=await call('team.secrets',{botId:id});if(!target.isConnected)return;
+    info('密钥仅供此 Bot 的 MCP 环境变量引用，模型工具不会返回明文。保存在 Windows 当前用户加密的独立密钥库中，重装插件后仍可使用。');if(view.error)info(view.error);
+    for(const r of view.requests.filter(r=>r.status==='pending'))info('待填写：'+r.name+(r.reason?' · '+r.reason:''));
+    for(const e of view.entries){const card=el('section','','feature-card');card.append(el('strong',e.name),el('small',' · 已保存'),button('删除密钥',safe(async()=>{await call('team.secret.delete',{botId:id,name:e.name});await secrets(id);})));body.append(card);}
+    const name=field('例如 API_TOKEN'),value=field('输入密钥','password');name.setAttribute('aria-label','密钥名称');value.setAttribute('aria-label','密钥值');value.autocomplete='new-password';
+    const save=button('加密保存密钥',safe(async()=>{const key=value.value;value.value='';await call('team.secret.set',{botId:id,name:name.value.trim(),value:key});await secrets(id);notice('密钥已加密保存。');}));save.disabled=!view.available;body.append(label('密钥名称',name),label('密钥值',value),save);
+    body.append(el('h3','迁移到另一台电脑'));info('先导入团队个人备份，再导入此密钥文件。文件用迁移密码加密；忘记密码无法恢复。不会把密钥写进普通备份。');
+    const pass=field('至少 10 个字符','password');pass.autocomplete='new-password';pass.setAttribute('aria-label','密钥迁移密码');body.append(label('迁移密码',pass),button('导出加密密钥文件',safe(async()=>{const password=pass.value;pass.value='';const text=await call('team.secret.export',{password});download('PI-bot-secrets-encrypted.json',text,'application/json');})));
+    const file=field('','file');file.accept='.json,application/json';file.setAttribute('aria-label','选择加密密钥文件');body.append(label('加密密钥文件',file),button('导入加密密钥文件',safe(async()=>{const selected=file.files?.[0];if(!selected)throw Error('请选择加密密钥文件。');if(selected.size>2*1024*1024)throw Error('文件过大。');const password=pass.value;pass.value='';const text=await selected.text(),upload=await call('team.secret.transfer',{action:'begin'});try{for(let offset=0;offset<text.length;offset+=6000)await call('team.secret.transfer',{action:'chunk',id:upload.id,offset,chunk:text.slice(offset,offset+6000)});await call('team.secret.transfer',{action:'commit',id:upload.id,password});}catch(error){await call('team.secret.transfer',{action:'cancel',id:upload.id}).catch(()=>{});throw error;}await secrets(id);notice('密钥已导入，并用当前电脑的 Windows 账号重新加密。');})));
+  }
+  async function mcp(botId,editing){
+    const token=show('Bot MCP 授权');const view=await call('team.connectors');if(!isCurrent(token))return;info(view.bridge?.note||'按 Bot 授权的本地 MCP 连接器。');
+    info('只配置你信任的服务端。启用后可启动本地程序；调用工具可能修改文件或外部系统。env 填非敏感常量，凭据使用 envRefs 引用对应 Bot 的密钥。');
+    for(const c of view.bridge?.servers||[]){const card=el('section','','feature-card');card.append(el('strong',c.name),el('p',(c.enabled?'已启用':'已停用')+' · '+c.botIds.map(id=>getState().bots.find(b=>b.id===id)?.name||'已移除').join('、')),button('编辑连接器',safe(()=>mcp(botId,c))),button(c.enabled?'停用':'启用',safe(async()=>{await call('team.mcp.save',{...c,enabled:!c.enabled});await mcp(botId);})));const remove=button('删除连接器',safe(async()=>{if(remove.dataset.confirm!=='yes'){remove.dataset.confirm='yes';remove.textContent='确认删除连接器';return;}await call('team.mcp.delete',{id:c.id});await mcp(botId);}));card.append(remove);for(const id of c.botIds){if(!c.enabled)break;if(c.type==='http')card.append(button('网页登录 '+(getState().bots.find(b=>b.id===id)?.name||id),safe(async()=>{const login=await call('team.mcp.login',{botId:id,serverId:c.id});if(!isCurrent(token))return;const url=new URL(login.url);if(url.protocol!=='https:')throw Error('授权页面必须使用 HTTPS。');card.querySelector('.pi-mcp-login-link')?.remove();const link=el('a','打开授权页面 · 在浏览器中完成登录','pi-mcp-login-link bt-soft bt-soft-sm');link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';card.append(link);notice('请打开授权页面，完成后点击“检查工具”验证连接。授权链接 3 分钟内有效。');})));card.append(button('检查 '+(getState().bots.find(b=>b.id===id)?.name||id)+' 的工具',safe(async()=>{const result=await call('team.mcp.tools',{botId:id,serverId:c.id});card.append(el('pre',JSON.stringify(result,null,2)));})));}body.append(card);}
+    body.append(el('h3',editing?.id?'编辑配置':'新增本地 / 远程 MCP 连接器'));
+    const config=el('textarea');config.rows=14;config.setAttribute('aria-label','MCP 配置 JSON');config.value=JSON.stringify(editing||{name:'本地 MCP',command:'C:\\Program Files\\nodejs\\node.exe',args:['C:\\path\\to\\server.js'],cwd:'',env:{},envRefs:{API_KEY:'API_TOKEN'},allowedTools:[],enabled:false},null,2);
+    const targets=el('fieldset');targets.append(el('legend','授权 Bot'));for(const b of getState().bots){const c=field('','checkbox');c.value=b.id;c.checked=editing?editing.botIds.includes(b.id):b.id===botId;targets.append(label(b.name,c));}
+    info('allowedTools 填工具名称数组；["*"] 授权该服务的全部工具。[] 仅允许建立连接，不授予工具调用。保存后可点击“检查工具”。跨电脑导入的 MCP 默认停用，请检查程序路径和密钥后启用。');
+    body.append(config,targets,button('保存 MCP 配置',safe(async()=>{let value;try{value=JSON.parse(config.value);}catch{throw Error('MCP 配置不是有效 JSON。');}await call('team.mcp.save',{...value,botIds:[...targets.querySelectorAll('input:checked')].map(c=>c.value)});await mcp(botId);notice('MCP 配置与授权已保存。');})));
+  }
+  async function recovery(){
+    const token=show('任务恢复中心');const view=await call('team.recovery',{action:'list'});if(!isCurrent(token))return;info(view.note);if(!view.jobs.length)info('没有待核对或可恢复的任务。');
+    for(const j of view.jobs){const card=el('section','','feature-card'),status=el('p'),controls=el('div');card.append(el('strong',j.botName+' · '+j.status),el('p',j.task),el('small',j.error||''),status,controls);body.append(card);
+      const refresh=safe(async()=>{status.textContent='正在核对…';const result=await call('team.recovery',{action:'inspect',jobId:j.id});if(!card.isConnected)return;status.textContent=result.note;controls.replaceChildren();if(result.result)controls.append(el('pre',result.result));if(result.inputFound&&(result.resultFound&&!result.nativeRunning||result.ownRunning))controls.append(button(result.nativeRunning?'接回运行中的任务':'接回已保存结果',safe(async()=>{await call('team.recovery',{action:'adopt',jobId:j.id});await recovery();notice('已接回原任务，没有再次提交。');})));if(result.canRetry&&['interrupted','needs_review','error','aborted','not_started'].includes(j.status))for(const action of ['continue','retry']){const b=button(action==='continue'?'继续未完成步骤':'重新尝试原任务',safe(async()=>{if(b.dataset.confirm!=='yes'){b.dataset.confirm='yes';b.textContent='已检查原输出，确认'+(action==='continue'?'继续':'重试');return;}await call('team.recovery',{action,jobId:j.id,confirm:true});await recovery();notice('恢复任务已提交。');}));controls.append(b);}});
+      card.append(button('核对原生记录',refresh));if(j.sessionId)card.append(button('打开原生会话',safe(()=>call('team.session.open',{sessionId:j.sessionId}))));
+    }
+  }
+  return {secrets,mcp,recovery};
+}

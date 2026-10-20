@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "id": "local.ds-bot",
+  "name": "PI Bot",
+  "version": "0.3.78",
+  "description": "Persistent PI-bot teams with serial or parallel group execution, memory, capabilities and local schedules.",
+  "author": "vsd269 · PI Desktop adaptation; based on Fei2411/DeepSeek-Bot",
+  "homepage": "https://github.com/vsd269/PI-Bot",
+  "main": "main.js",
+  "icon": "icon.svg",
+  "engines": {
+    "piDesktop": ">=0.18.0"
+  },
+  "activationEvents": [
+    "onStartup",
+    "onCommand:local.ds-bot.open"
+  ],
+  "permissions": [
+    "ui.theme",
+    "ui.view",
+    "background.service",
+    "desktop.control",
+    "models.list",
+    "agent.complete",
+    "agent.tool.register",
+    "usage.read",
+    "renderer.extension",
+    "mcp.server.local",
+    "net.fetch",
+    "fs.read",
+    "ui.panel",
+    "ui.microphone"
+  ],
+  "i18n": {
+    "en": {
+      "name": "PI Bot",
+      "description": "PI-bot teams with per-group serial or parallel execution, memory, capabilities and local schedules.",
+      "safetyNotes": "Native Agent execution respects PI session permissions. Optional user-configured local MCP bridge runs trusted executables with per-Bot tool/secret grants. Vault uses Windows CurrentUser encryption; export a password-encrypted transfer file for another computer. On Windows, voice recording uses a plugin-owned hidden PowerShell/.NET helper with the Windows desktop microphone permission. It records only after a user action, releases capture on stop/cancel and writes no audio files. Local device tests do not upload audio. Other platforms use the authorized isolated PI panel. With voice interruption enabled, an active conversation also captures during reply playback and uses the configured live ASR service. Pause or end releases capture."
+    },
+    "zh-CN": {
+      "name": "PI Bot",
+      "description": "PI-bot 嵌入协作：群聊可选串行或并行，支持长期记忆、能力库与本地定时任务。",
+      "safetyNotes": "在所选工作区使用 PI 原生 Agent 与权限审批。主机器人可选择规划或直接执行。用户可显式配置本地 MCP 进程，并按 Bot 授权工具和密钥。密钥由 Windows 当前用户加密，跨电脑迁移需单独导出密码加密文件。 Windows 语音使用插件自带的无窗口 PowerShell/.NET 录音辅助程序，遵守 Windows 桌面麦克风权限；只在用户主动开启时录音，停止或取消后释放设备，不写音频文件，每段最多60秒。设备测试不上传；其他平台沿用 PI 授权的隔离面板。 开启说话打断后，语音通话朗读期间也会收音并连接已配置的实时转写服务；暂停或结束通话会停止。"
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "local.ds-bot.open",
+        "title": "PI Bot: Open team / 打开机器人团队"
+      }
+    ],
+    "views": [
+      {
+        "id": "ds-bot-team",
+        "title": {
+          "en": "PI Bot",
+          "zh-CN": "PI Bot"
+        },
+        "icon": "users",
+        "entry": "renderer/index.html",
+        "order": 30
+      }
+    ],
+    "services": [
+      {
+        "id": "ds-bot-team-service",
+        "label": "PI-bot task status / 任务状态"
+      }
+    ]
+  },
+  "renderer": "renderer/entry.mjs",
+  "ui": {
+    "panel": "renderer/microphone.html",
+    "width": 440,
+    "height": 420,
+    "title": "PI Bot · 麦克风"
+  },
+  "rendererActions": [
+    "plugin.call"
+  ],
+  "rendererCallMethods": [
+    "mode.request",
+    "request.start",
+    "request.read"
+  ]
+}
