@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "local.ds-bot",
+  "id": "local.pi-bot",
   "name": "PI Bot",
-  "version": "0.3.80",
+  "version": "0.3.81",
   "description": "Persistent PI-bot teams with serial or parallel group execution, memory, capabilities and local schedules.",
   "author": "vsd269 · PI Desktop adaptation; based on Fei2411/DeepSeek-Bot",
   "homepage": "https://github.com/vsd269/PI-Bot",
@@ -13,7 +13,7 @@
   },
   "activationEvents": [
     "onStartup",
-    "onCommand:local.ds-bot.open"
+    "onCommand:local.pi-bot.open"
   ],
   "permissions": [
     "ui.theme",
@@ -46,13 +46,13 @@
   "contributes": {
     "commands": [
       {
-        "id": "local.ds-bot.open",
+        "id": "local.pi-bot.open",
         "title": "PI Bot: Open team / 打开机器人团队"
       }
     ],
     "views": [
       {
-        "id": "ds-bot-team",
+        "id": "pi-bot-team",
         "title": {
           "en": "PI Bot",
           "zh-CN": "PI Bot"
@@ -64,7 +64,7 @@
     ],
     "services": [
       {
-        "id": "ds-bot-team-service",
+        "id": "pi-bot-team-service",
         "label": "PI-bot task status / 任务状态"
       }
     ]

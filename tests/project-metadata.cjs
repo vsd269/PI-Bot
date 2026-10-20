@@ -1,9 +1,9 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8'),repo='https://github.com/vsd269/PI-Bot';
-test('project identity points to PI Bot and keeps the installed plugin identity',()=>{
+test('project identity points to PI Bot and uses the PI Bot plugin identity',()=>{
  const manifest=JSON.parse(read('manifest.json')),pkg=JSON.parse(read('package.json'));
- assert.equal(manifest.id,'local.ds-bot');assert.equal(manifest.homepage,repo);assert.equal(manifest.version,pkg.version);assert.equal(pkg.repository.url,repo+'.git');
+ assert.equal(manifest.id,'local.pi-bot');assert.equal(manifest.homepage,repo);assert.equal(manifest.version,pkg.version);assert.equal(pkg.repository.url,repo+'.git');
 });
 test('about, release and feedback links use PI Bot, with distinct upstream attribution',()=>{
  const source=read('renderer/settings-pages.mjs');assert(source.includes(`const REPO='${repo}'`));assert(source.includes("const UPSTREAM='https://github.com/Fei2411/DeepSeek-Bot'"));

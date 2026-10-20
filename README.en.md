@@ -17,11 +17,11 @@ PI Bot is an independently maintained adaptation of [DeepSeek-Bot](https://githu
 ## Install
 
 1. Install [PI Desktop](https://github.com/vsd269/PI-Desktop) and configure an available model.
-2. Download `local.ds-bot-VERSION.piplug` from [Releases](https://github.com/vsd269/PI-Bot/releases/latest).
+2. Download `local.pi-bot-VERSION.piplug` from [Releases](https://github.com/vsd269/PI-Bot/releases/latest).
 3. Install the local package in PI Desktop's plugin manager, review permissions and restart the client.
 4. Open **PI Bot** and create your Bots or groups.
 
-The declared minimum host API is **0.18.0**. The release package was verified with the Windows PI Desktop **0.20.1 native installer** using isolated data. Windows is the primary validation platform; other platforms have not been fully tested. The plugin ID remains `local.ds-bot` for existing installations.
+The declared minimum host API is **0.18.0**. The release package was verified with the Windows PI Desktop **0.20.1 native installer** using isolated data. Windows is the primary validation platform; other platforms have not been fully tested. The plugin ID is `local.pi-bot`; see the identity migration instructions below when upgrading from 0.3.80 or earlier.
 
 ## Build and test
 
@@ -56,6 +56,10 @@ Code is distributed under [Apache License 2.0](LICENSE). This repository does no
 
 Starting with 0.3.79, an open PI Bot page checks this repository's public stable GitHub Releases in the background. New versions appear in the sidebar; Settings → About provides manual checks, release notes and package downloads. Automatic checking can be disabled. Successful checks are cached for six hours; failures are shown honestly and can be retried.
 
-Download the `.piplug`, import it in PI Desktop's plugin manager, then restart. This does not silently replace running plugins. Versions before 0.3.79 need one manual upgrade to acquire this feature. No connector token is sent to the release API. Publishers must create a non-draft, non-prerelease Release with a matching `local.ds-bot-X.Y.Z.piplug` asset and a higher version.
+Download the `.piplug`, import it in PI Desktop's plugin manager, then restart. This does not silently replace running plugins. Versions before 0.3.79 need one manual upgrade to acquire this feature. No connector token is sent to the release API. Publishers must create a non-draft, non-prerelease Release with a matching `local.pi-bot-X.Y.Z.piplug` asset and a higher version.
 
-For the plugin center upload, use the canonical `local.ds-bot-VERSION.piplug`. The identically sized and hashed `PI-bot-VERSION.piplug` release asset is kept solely for 0.3.79 update discovery. `npm run preflight:market` checks the specific filename and dynamic-import patterns encountered during submission; it does not replace the platform's full review.
+For the plugin center upload, use the canonical `local.pi-bot-VERSION.piplug`. The identically sized and hashed `PI-bot-VERSION.piplug` release asset is kept solely for 0.3.79 update discovery. `npm run preflight:market` checks the specific filename and dynamic-import patterns encountered during submission; it does not replace the platform's full review.
+
+## Identity migration in 0.3.81
+
+PI Bot now uses plugin ID `local.pi-bot`. Before upgrading from 0.3.80 or earlier, disable the old PI Bot plugin without uninstalling it, import the new package, and restart. On first start, the new plugin copies and validates the legacy team, chat history, memory, skills, uploads, browser profiles and Windows-user-encrypted vault. Legacy data is kept. Existing new data/backups are never overwritten or merged; interrupted migration resumes from a journal. The old plugin must stay disabled to prevent duplicate task execution.

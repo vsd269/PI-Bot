@@ -14,6 +14,7 @@ const {deliverRoundReports}=require('./group-reports');
 const {postToGroup}=require('./group-actions');
 const {createBotFrom,createGroupFrom,archiveChat,deliverKickoffs}=require('./roster-actions');
 const {Backups}=require('./backups');
+const {migrateIdentity}=require('./identity-migration');
 const {Vault}=require('./vault');
 const {McpBridge}=require('./mcp-bridge');
 const {Recovery}=require('./recovery');
@@ -76,15 +77,15 @@ function partialPlanReply(text) {
 }
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 class Team {
-  constructor(pi, { pollMs = 500, memoryReview = true } = {}) {
-    this.pi = pi; this.pollMs = pollMs; this.state = {version:1,bots:[],rooms:[],jobs:[]};
+  constructor(pi, { pollMs = 500, memoryReview = true, identityReady = false } = {}) {
+    this.pi = pi; this.identityReady=identityReady; this.pollMs = pollMs; this.state = {version:1,bots:[],rooms:[],jobs:[]};
     this.writes = Promise.resolve(); this.memberChains = new Map(); this.roomChains = new Map(); this.waiters = new Map(); this.observed = new Set(); this.stopped = false;
     this.rosterWrites=Promise.resolve();this.settingWrites=Promise.resolve();this.memoryReview=memoryReview;this.usageAttempts=new Map();this.roomExecutionChains=new Map();this.privateAdminChains=new Map();this.background=new Set();
     this.messageAdmissions=new Map();this.roomPending=new Map();
     this.deliveries=new Map();this.summaryChains=new Map();
   }
   async load() {
-    this.handoffs=new Handoffs(this);this.data = await this.pi.plugin.getDataPath(); await fs.mkdir(this.data,{recursive:true}); this.file = path.join(this.data,'team.json');this.longMessages=new LongMessages(this);
+    this.handoffs=new Handoffs(this);this.data = await this.pi.plugin.getDataPath(); if(!this.identityReady)await migrateIdentity(this.pi,this.data); await fs.mkdir(this.data,{recursive:true}); this.file = path.join(this.data,'team.json');this.longMessages=new LongMessages(this);
     this.backups=new Backups(this);await this.backups.prepare();
     try {
       const value = JSON.parse(await fs.readFile(this.file,'utf8'));
@@ -768,7 +769,7 @@ class Team {
   transcript(input){return {lines:linesOf(this,input.kind==='room'?'room':'bot',input.id)};}
   usage(input){return usageDashboard(this,input);}
   async connectors(){let response;try{response=await this.invoke('mcp/list',[{}]);}catch{response={};}return {available:true,servers:(response.servers||[]).map(s=>({id:s.id,name:s.name||s.id,enabled:s.enabled!==false,scope:s.scope})),statuses:(response.statuses||[]).map(s=>({serverId:s.serverId,state:s.state||s.status,tools:s.tools?.length??s.toolCount,error:typeof s.error==='string'?'连接失败，请在 PI 原生 MCP 设置查看详情。':undefined})),canConfigure:false,bridge:this.bridge.view()};}
-  async close(){if(this.closePromise)return this.closePromise;this.closePromise=this.closeOnce();return this.closePromise;}
-  async closeOnce(){this.stopped=true;clearInterval(this.timer);this.pi.events.off('session:turnEnded',this.ended);for(const resolve of this.waiters.values())resolve();this.waiters.clear();this.schedules?.close();await this.integrations?.close();await this.bridge?.close();await this.tools?.close();await this.memory?.close?.();await Promise.allSettled([...this.memberChains.values(),...this.roomChains.values(),...this.privateAdminChains.values()]);while(this.background.size)await Promise.allSettled([...this.background]);await this.writes;if(this.backups&&!this.backups.root.startsWith(this.data+path.sep))try{await this.backups.checkpoint(this.state,'shutdown',true);}catch(error){this.backups.lastError=error.message;}}
+  async close({checkpoint=true}={}){if(this.closePromise)return this.closePromise;this.closePromise=this.closeOnce(checkpoint);return this.closePromise;}
+  async closeOnce(checkpoint){this.stopped=true;clearInterval(this.timer);if(this.ended)this.pi.events.off('session:turnEnded',this.ended);for(const resolve of this.waiters.values())resolve();this.waiters.clear();this.schedules?.close();await this.integrations?.close();await this.bridge?.close();await this.tools?.close();await this.memory?.close?.();await Promise.allSettled([...this.memberChains.values(),...this.roomChains.values(),...this.privateAdminChains.values()]);while(this.background.size)await Promise.allSettled([...this.background]);await this.writes;if(checkpoint&&this.backups&&!this.backups.root.startsWith(this.data+path.sep))try{await this.backups.checkpoint(this.state,'shutdown',true);}catch(error){this.backups.lastError=error.message;}}
 }
 module.exports={Team,parsePlan,ADMIN_RULES,WORKER_RULES};

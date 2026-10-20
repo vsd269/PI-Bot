@@ -6,6 +6,7 @@ const {validateIntegrations}=require('./integrations');
 const {cleanupRoster}=require('./roster-cleanup');
 const {endpoint}=require('./net');
 const {validateBundle}=require('./skill-import');
+const {ID,LEGACY_ID,backupRoot}=require('./identity');
 const MAX_BYTES=32*1024*1024;
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[a-zA-Z0-9_-]{1,120}$/.test(value);
@@ -52,7 +53,7 @@ function validateState(state){
 function parseArchive(text){
   if(typeof text!=='string'||Buffer.byteLength(text)>MAX_BYTES)throw Error('备份文件过大（最多 32 MB）。');
   let value;try{value=JSON.parse(text);}catch{throw Error('无法读取备份 JSON。');}
-  if(value?.format!=='pi-bot-backup'||value.schema!==1||value.pluginId!=='local.ds-bot'||!value.payload||value.sha256!==hash(value.payload))throw Error('备份格式或校验值不正确。');
+  if(value?.format!=='pi-bot-backup'||value.schema!==1||![ID,LEGACY_ID].includes(value.pluginId)||!value.payload||value.sha256!==hash(value.payload))throw Error('备份格式或校验值不正确。');
   validateState(value.payload.team);
   const files=value.payload.memory;
   if(!files||Array.isArray(files)||typeof files!=='object'||Object.keys(files).length>10000)throw Error('备份记忆文件无效。');
@@ -81,7 +82,7 @@ class Backups{
     this.team=team;const data=team.data;
     // PI uninstalls plugins/data/<id>, so keep recovery outside that tree.
     // Arbitrary test/dev data roots keep their backups inside their own root.
-    this.root=path.basename(path.dirname(data))==='data'?path.join(path.dirname(path.dirname(data)),'backups','local.ds-bot'):path.join(data,'recovery');
+    this.root=backupRoot(data);
     this.uploads=new Map();this.lastConfig='';this.lastAt=0;this.lastError=null;
   }
   async archive(state=this.team.state,reason='manual'){
@@ -89,7 +90,7 @@ class Backups{
     const walk=async dir=>{let entries;try{entries=await fs.readdir(dir,{withFileTypes:true});}catch(e){if(e.code==='ENOENT')return;throw e;}
       for(const entry of entries){if(entry.isSymbolicLink())continue;const file=path.join(dir,entry.name);if(entry.isDirectory())await walk(file);else if(entry.isFile()){const rel=path.relative(this.team.data,file).split(path.sep).join('/');if(memoryPath(rel)){const info=await fs.stat(file);size+=info.size;if(size>MAX_BYTES)throw Error('记忆文件超过备份大小限制。');memory[rel]=await fs.readFile(file,'utf8');}}}};
     await walk(path.join(this.team.data,'memory'));
-    const payload={team:this.team.vault?this.team.vault.cleanState(state):structuredClone(state),memory:this.team.vault?this.team.vault.clean(memory):memory},archive={format:'pi-bot-backup',schema:1,pluginId:'local.ds-bot',pluginVersion:require('../manifest.json').version,createdAt:new Date().toISOString(),reason,sha256:hash(payload),payload};
+    const payload={team:this.team.vault?this.team.vault.cleanState(state):structuredClone(state),memory:this.team.vault?this.team.vault.clean(memory):memory},archive={format:'pi-bot-backup',schema:1,pluginId:ID,pluginVersion:require('../manifest.json').version,createdAt:new Date().toISOString(),reason,sha256:hash(payload),payload};
     const text=JSON.stringify(archive);if(Buffer.byteLength(text)>MAX_BYTES)throw Error('备份超过 32 MB，请另行复制完整数据目录。');return {archive,text};
   }
   configKey(state){return hash({bots:state.bots.map(({chat,sessions,sessionArchive,sessionWorkspaces,memory,...config})=>config),rooms:state.rooms.map(({log,sessions,planning,...config})=>config),integrations:state.integrations,prefs:state.prefs,botConnectors:state.botConnectors,capabilities:state.capabilities,schedules:(state.schedules||[]).map(({runs,nextAt,status,error,...config})=>config)});}

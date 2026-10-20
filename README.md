@@ -36,13 +36,20 @@ PI Bot 是基于 [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习�
 ## 安装
 
 1. 安装 [PI Desktop](https://github.com/vsd269/PI-Desktop)，配置可用的模型。
-2. 从 [Releases](https://github.com/vsd269/PI-Bot/releases/latest) 下载 `local.ds-bot-版本号.piplug`。
+2. 从 [Releases](https://github.com/vsd269/PI-Bot/releases/latest) 下载 `local.pi-bot-版本号.piplug`。
 3. 在 PI Desktop 的插件管理页选择从本地安装插件包，检查并授予所需权限。
 4. 重启 PI Desktop，打开 **PI Bot**，创建 Bot 和群聊。
 
 插件声明的最低接口版本为 PI Desktop **0.18.0**；本次安装包在 Windows 的 **0.20.1 原生安装器**上做过隔离安装校验。Windows 是主要开发和验证平台，其他平台尚未进行完整验证。
 
-升级安装使用同一个插件 ID `local.ds-bot`，以延续现有数据。建议升级前使用插件内的备份功能。安装包不携带作者的 Bot、聊天、密钥或个人配置。
+从 **0.3.81** 起，插件 ID 和正式包名统一使用 **`local.pi-bot`**，界面名称为 **PI Bot**。从 0.3.80 或更早版本升级：
+
+1. 在 PI Desktop 插件管理中先**停用旧版 PI Bot**，暂不要卸载。
+2. 导入 `local.pi-bot-版本号.piplug`，授予权限并重启。
+3. 首次启动自动复制旧 Bot、群聊、聊天、记忆、Skill、上传附件、浏览器资料和同一 Windows 用户的加密密钥，并保留旧数据。新版已有团队或备份时不会再次导入旧数据。
+4. 确认新版正常后，可继续保留停用的旧版。完整备份仍建议保留。
+
+迁移只处理当前 PI 数据根目录下已知的旧插件目录，不扫描其他用户资料。迁移先在临时目录验证完整性，再提交；中断后可重试，不合并或覆盖已有新团队。两个版本同时启用时，新版会提示先停用旧版，以免重复执行任务。安装包不携带作者的 Bot、聊天或密钥。
 
 ## 接收新版本提醒
 
@@ -50,9 +57,9 @@ PI Bot 是基于 [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习�
 
 更新流程是 **收到提醒 → 下载 .piplug → 在 PI Desktop 插件管理中导入 → 重启**，不会静默替换运行中的插件。0.3.78 及更早版本需要先手动安装一次带检查功能的版本。自动检查只在 PI Bot 页面运行时进行，正常结果缓存 6 小时；离线或 GitHub 限流时不会误报“已是最新”。检查只访问公开 Releases API，不使用用户的 GitHub 连接器令牌。
 
-维护者发布时，`manifest.json`、`package.json`、Git 标签和包名需对应同一个更高版本；创建 **非草稿、非预发布** 的 Release，并附上 `local.ds-bot-X.Y.Z.piplug`。仅推送源码或创建没有安装包的标签不会触发可安装更新提示。
+维护者发布时，`manifest.json`、`package.json`、Git 标签和包名需对应同一个更高版本；创建 **非草稿、非预发布** 的 Release，并附上 `local.pi-bot-X.Y.Z.piplug`。仅推送源码或创建没有安装包的标签不会触发可安装更新提示。
 
-上传插件中心时，选择 `local.ds-bot-版本号.piplug`，文件名必须与插件 ID 和版本一致。GitHub 同时保留内容相同的 `PI-bot-版本号.piplug` 兼容附件，供 0.3.79 的更新检测使用；它不用于插件中心上传。关于页名称仍为 PI Bot，安装 ID 不变。
+上传插件中心时，选择 `local.pi-bot-版本号.piplug`，文件名必须与插件 ID 和版本一致。GitHub 同时保留内容相同的 `PI-bot-版本号.piplug` 兼容附件，供 0.3.79 的更新检测使用；它不用于插件中心上传。关于页名称仍为 PI Bot，安装 ID 不变。
 
 `npm run preflight:market` 对照已遇到的文件名和动态导入提示做本地检查，不代表已经通过平台完整审核。
 
@@ -78,7 +85,7 @@ npm run package
 npm run verify:package
 ```
 
-产物位于 `dist/local.ds-bot-版本号.piplug`，校验值位于 `dist/SHA256SUMS.txt`。`.piplug` 使用 PI 安装器需要的 ZIP STORE 格式；不要直接改用普通压缩包代替。
+产物位于 `dist/local.pi-bot-版本号.piplug`，校验值位于 `dist/SHA256SUMS.txt`。`.piplug` 使用 PI 安装器需要的 ZIP STORE 格式；不要直接改用普通压缩包代替。
 
 ```text
 renderer/   插件界面、交互与来源记录

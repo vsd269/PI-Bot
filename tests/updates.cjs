@@ -17,6 +17,10 @@ test('canonical marketplace asset is preferred while older Releases remain reada
  old.assets=[canonical];assert.equal(releaseInfo(old,'0.3.79').status,'available');
  canonical.browser_download_url='https://evil.test/'+canonical.name;assert.throws(()=>releaseInfo(old,'0.3.79'));
 });
+test('PI Bot identity asset is preferred over both legacy names',()=>{
+ const r=release(),asset=structuredClone(r.assets[0]);asset.name='local.pi-bot-0.3.80.piplug';asset.browser_download_url=repo+'/releases/download/v0.3.80/'+asset.name;r.assets.push(asset);
+ assert(releaseInfo(r,'0.3.79').downloadUrl.endsWith('/local.pi-bot-0.3.80.piplug'));
+});
 test('concurrent callers share a bounded public request and six-hour cache',async()=>{
  let count=0,finish,clock=0;
  const checker=createUpdateChecker({current:'0.3.79',now:()=>clock,fetchJSON:async(url,options,max)=>{count++;assert.equal(url,'https://api.github.com/repos/vsd269/PI-Bot/releases/latest');assert.equal(options.timeoutMs,8000);assert(!options.headers.Authorization);assert.equal(max,512*1024);await new Promise(r=>finish=r);return release();}});
@@ -33,5 +37,5 @@ test('network failures never report latest; manual retry bypasses failure cache'
 test('the updater bridge is whitelisted and independent of bootstrap and transcript',()=>{
  const fs=require('node:fs'),path=require('node:path'),root=path.resolve(__dirname,'..');
  const main=fs.readFileSync(path.join(root,'main.js'),'utf8'),app=fs.readFileSync(path.join(root,'renderer/app.mjs'),'utf8');
- assert(main.includes("case 'team.updates': return updates.check"));assert(main.includes("if(!['team.updates'"));assert(app.includes('updateNotice.dispose()'));assert(!fs.readFileSync(path.join(root,'src/updates.js'),'utf8').includes('team.snapshot'));
+ assert(main.includes("if(channel==='team.updates')return updates.check"));assert(main.includes("if(!['team.updates'"));assert(app.includes('updateNotice.dispose()'));assert(!fs.readFileSync(path.join(root,'src/updates.js'),'utf8').includes('team.snapshot'));
 });

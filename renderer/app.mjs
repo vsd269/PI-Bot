@@ -299,13 +299,18 @@ export async function mount(target,invoke,onNative,embedded=false){
     onCreated:item=>select('bot',item.id)
   });
   async function refresh(){if(closed||booting||rosterPending)return;if(refreshing){refreshAgain=true;return;}refreshing=true;try{do{refreshAgain=false;const epoch=refreshEpoch,response=await call('team.state',stateSync.request());if(closed)return;if(epoch!==refreshEpoch||rosterPending){refreshAgain=!rosterPending;continue;}state=preferenceSaver.receive(appearanceSaver.overlay(stateSync.receive(response)));render();}while(refreshAgain&&!closed);}finally{refreshing=false;}}
-  async function bootstrap(){
-    notice('');
+  async function bootstrap(retry=false){
+    notice('');startup.innerHTML='<span class="pi-startup-dot" aria-hidden="true"></span><span>正在载入机器人与会话…</span>';
     try{
+      let progress=await invoke('team.startup',{retry});
+      while(progress.phase==='loading'||progress.phase==='idle'){
+        if(closed)return;startup.lastElementChild.textContent=progress.message;await new Promise(resolve=>setTimeout(resolve,600));if(closed)return;progress=await invoke('team.startup',{});
+      }
+      if(progress.phase!=='ready')throw Error(progress.message||'PI Bot 尚未就绪。');
       let value;try{value=await invoke('team.bootstrap',{selection:selected});}catch{value=await invoke('team.state');}
       if(closed)return;state=appearanceSaver.overlay(value);render();startup.remove();app.removeAttribute('aria-busy');booting=false;activeRead.check();
       if(value.startupPreview)refresh().catch(()=>{});
-    }catch(error){if(closed)return;startup.replaceChildren(el('span','会话载入失败，请重试。'));const retry=el('button','重新加载','soft-button');retry.onclick=()=>{retry.disabled=true;bootstrap();};startup.append(retry);notice(error.message||String(error));}
+    }catch(error){if(closed)return;startup.replaceChildren(el('span',error.message||'会话载入失败，请重试。'));const retry=el('button','重新加载','soft-button');retry.onclick=()=>{retry.disabled=true;bootstrap(true);};startup.append(retry);notice(error.message||String(error));}
   }
   let draft=null,roomDraft=null,editorDispose=null,confirming=null,sessionToken=0,modelsReady=false;
   const fieldSavers=new Map();let settingPending=0;
