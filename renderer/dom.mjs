@@ -2,6 +2,8 @@ import {icons} from './upstream/icons-static.mjs';
 // Additional original menu icons from the pinned upstream icons.mjs source.
 const lineIcon=paths=>({tag:'svg',props:{width:20,height:20,viewBox:'0 0 20 20',fill:'none',stroke:'currentColor',strokeWidth:1.5,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true},children:paths.map(d=>({tag:'path',props:{d}}))});
 const menuIcons={
+  // Same cloud and arrow geometry as the pinned upstream CloudDownloadIcon.
+  CloudDownloadIcon:lineIcon(['M6.5 15.25H5.75a3.25 3.25 0 0 1-.55-6.45 4.75 4.75 0 0 1 9.2-1.1 3.75 3.75 0 0 1 .1 7.55H13.5','M10 9.75v7','M7.75 14.5L10 16.75l2.25-2.25']),
   SidebarIcon:lineIcon(['M5.5 4h9A2.5 2.5 0 0 1 17 6.5v7a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 3 13.5v-7A2.5 2.5 0 0 1 5.5 4Z','M8 4v12']),
   SidePanelIcon:lineIcon(['M5 3.75h10A1.25 1.25 0 0 1 16.25 5v10A1.25 1.25 0 0 1 15 16.25H5A1.25 1.25 0 0 1 3.75 15V5A1.25 1.25 0 0 1 5 3.75Z','M12.25 3.75v12.5']),
   EyeIcon:lineIcon(['M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5Z','M10 7.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z']),

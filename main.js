@@ -6,6 +6,7 @@ const {previewAttachment}=require('./src/attachments');
 const {openMessageFile}=require('./src/message-files');
 const {Microphone}=require('./src/microphone');
 const {WindowsMicrophone}=require('./src/windows-microphone');
+const updates=require('./src/updates').createUpdateChecker();
 let team,microphone,openRequested=false;
 const requests=new Map();
 const syncState=require('./src/state-sync').createStateSync();
@@ -18,6 +19,7 @@ async function onUnload(){await microphone?.close();microphone=null;await team?.
 async function onPanelInvoke(channel,input={}){
   if(!team)throw new Error('PI-bot is not active.');
   switch(channel){
+    case 'team.updates': return updates.check({force:input.force===true});
     case 'team.microphone': return microphone.operation(input);
     case 'microphone.panel': return microphone.panel(input);
     case 'team.skill.import': return team.capabilities.imports.operation(input);
@@ -101,7 +103,7 @@ function onRendererCall(method,args={}){
   if(method==='mode.request'){const open=openRequested;openRequested=false;return {open};}
   if(method==='request.start'){
     if(args.channel==='team.bootstrap')return beginRequest(args);
-    if(!['team.microphone','team.file.open','team.attachment.upload','team.plugins','team.github','team.bot.main','team.skill.import','team.extensions','team.browser','team.speech','team.mcp.login','team.secret.transfer','team.attachment.preview','team.mcp.save','team.mcp.delete','team.mcp.tools','team.secrets','team.secret.set','team.secret.get','team.secret.delete','team.secret.export','team.secret.import','team.recovery','team.bot.preview','team.bot.permission','team.theme','team.backup','team.bot.patch','team.room.patch','team.bot.appearance','team.bootstrap','team.state','team.models','team.workspaces','team.appearance','team.bot.save','team.memory.view','team.memory.add','team.memory.forget','team.memory.ask','team.room.save','team.group.send','team.private.send','team.job.cancel','team.session.open','team.bot.delete','team.bot.duplicate','team.room.delete','team.history.search','team.transcript','team.pin','team.react','team.prefs','team.question.answer','team.usage','team.connectors','team.schedules','team.schedule.save','team.schedule.toggle','team.schedule.delete','team.capabilities','team.capability.save','team.capability.delete','team.capability.attach'].includes(args.channel))throw new Error('Unknown PI-bot operation.');
+    if(!['team.updates','team.microphone','team.file.open','team.attachment.upload','team.plugins','team.github','team.bot.main','team.skill.import','team.extensions','team.browser','team.speech','team.mcp.login','team.secret.transfer','team.attachment.preview','team.mcp.save','team.mcp.delete','team.mcp.tools','team.secrets','team.secret.set','team.secret.get','team.secret.delete','team.secret.export','team.secret.import','team.recovery','team.bot.preview','team.bot.permission','team.theme','team.backup','team.bot.patch','team.room.patch','team.bot.appearance','team.bootstrap','team.state','team.models','team.workspaces','team.appearance','team.bot.save','team.memory.view','team.memory.add','team.memory.forget','team.memory.ask','team.room.save','team.group.send','team.private.send','team.job.cancel','team.session.open','team.bot.delete','team.bot.duplicate','team.room.delete','team.history.search','team.transcript','team.pin','team.react','team.prefs','team.question.answer','team.usage','team.connectors','team.schedules','team.schedule.save','team.schedule.toggle','team.schedule.delete','team.capabilities','team.capability.save','team.capability.delete','team.capability.attach'].includes(args.channel))throw new Error('Unknown PI-bot operation.');
     return beginRequest(args);
   }
   if(method==='request.read'){
