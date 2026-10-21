@@ -12,7 +12,16 @@ export function createClient(dispatch){
   const invoke=(method,args,priority)=>new Promise((resolve,reject)=>{queues[priority].push({method,args,resolve,reject});void drain();});
   return async(channel,payload)=>{
     const priority=(['team.private.send','team.group.send','team.view.answer','team.theme','team.prefs','team.capability.attach','team.bot.save','team.bot.delete','team.room.save','team.room.delete'].includes(channel)||channel==='team.microphone'&&['begin','finish','cancel'].includes(payload?.action))?0:channel==='team.state'?2:1;
-    const {id}=await invoke('request.start',{channel,payload},priority);let offset=0,json='';
+    const request={channel,payload},encoded=JSON.stringify(request);let started;
+    if(new TextEncoder().encode(encoded).length<=60000)started=await invoke('request.start',request,priority);
+    else{
+      const upload=await invoke('request.upload',{action:'begin',length:encoded.length},priority);
+      try{
+        for(let offset=0;offset<encoded.length;offset+=10000)await invoke('request.upload',{action:'chunk',id:upload.id,offset,chunk:encoded.slice(offset,offset+10000)},priority);
+        started=await invoke('request.upload',{action:'finish',id:upload.id},priority);
+      }catch(error){await invoke('request.upload',{action:'cancel',id:upload.id},priority).catch(()=>{});throw error;}
+    }
+    const {id}=started;let offset=0,json='';
     for(;;){
       const result=await invoke('request.read',{id,offset},priority);
       if(result.pending){await new Promise(resolve=>setTimeout(resolve,300));continue;}

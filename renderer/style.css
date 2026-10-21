@@ -316,6 +316,7 @@ button.bt-token>.bt-mark{flex:none}
 .pi-github-login{padding:16px;display:flex;flex-direction:column;gap:14px;border-top:1px solid var(--bt-line);animation:bt-veil-in .18s ease-out}.pi-github-login .bt-input{min-width:230px}.pi-connector-advanced{margin-top:10px}.pi-connector-advanced summary{font-size:12px;cursor:pointer;color:var(--bt-ink-2);padding:6px}.pi-connector-advanced>.bt-connector{margin-top:10px}
 .thinking-block>div{max-height:calc(1.6em * 5);overflow-y:auto;scrollbar-width:thin}.bt-error,.message-error{color:#e02135}.bt-unread{background:var(--bt-accent)!important}
 .pi-long-message{display:flex;flex-direction:column;gap:6px}.pi-long-toggle{align-self:flex-start;font:inherit;font-size:12px;background:none;border:0;padding:4px 0;color:var(--bt-accent);cursor:pointer}
+.bt-ububble .pi-long-toggle{color:inherit;text-decoration:underline;text-underline-offset:3px;opacity:.9}.pi-long-toggle:focus-visible{outline:2px solid currentColor;outline-offset:3px;border-radius:3px}
 @media(max-width:660px){.pi-provider-grid{grid-template-columns:1fr}.pi-github-login .bt-input{min-width:0}.pi-provider-editor{padding:12px}}
 @media(prefers-reduced-motion:reduce){.bt-plus svg{transition:none!important}}
 .pi-sidebar-show{position:absolute;left:12px;z-index:2}.conversation-header .bt-head{padding:0 48px;box-sizing:border-box}.pi-bot-app[data-sidebar-collapsed]{grid-template-columns:64px minmax(0,1fr)!important}.pi-bot-app[data-sidebar-collapsed]~.pi-bot-splitter{display:none}.pi-bot-app[data-pi-window] .pi-voice-pane{top:108px!important}

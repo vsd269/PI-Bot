@@ -12,6 +12,7 @@ const {migrateIdentity}=require('./src/identity-migration');
 let activation;
 let team,microphone,openRequested=false;
 const requests=new Map();
+const rendererUploads=new (require('./src/renderer-uploads').RendererUploads)();
 const syncState=require('./src/state-sync').createStateSync();
 async function onLoad(){
   activation=createActivation(async signal=>{
@@ -24,7 +25,7 @@ async function onLoad(){
   await pi.services.register({id:'pi-bot-team-service',start:async()=>{},stop:async()=>activation?.close()});
   activation.begin();
 }
-async function onUnload(){await activation?.close();microphone=null;await Promise.allSettled([pi.commands.unregister('local.pi-bot.open'),pi.services.unregister('pi-bot-team-service')]);team=null;requests.clear();}
+async function onUnload(){await activation?.close();microphone=null;await Promise.allSettled([pi.commands.unregister('local.pi-bot.open'),pi.services.unregister('pi-bot-team-service')]);team=null;requests.clear();rendererUploads.clear();}
 async function onPanelInvoke(channel,input={}){
   if(channel==='team.startup')return activation?.status({retry:input.retry===true})||{phase:'error',message:'PI Bot 尚未启动。'};
   if(channel==='team.updates')return updates.check({force:input.force===true});
@@ -112,6 +113,7 @@ async function onPanelInvoke(channel,input={}){
   }
 }
 function onRendererCall(method,args={}){
+  if(method==='request.upload')return rendererUploads.operation(args,request=>onRendererCall('request.start',request));
   if(method==='mode.request'){const open=openRequested;openRequested=false;return {open};}
   if(method==='request.start'){
     if(args.channel==='team.bootstrap')return beginRequest(args);

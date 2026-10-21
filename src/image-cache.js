@@ -3,16 +3,20 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const {createHash,randomUUID}=require('node:crypto');
 const {spawn}=require('node:child_process');
+const {attachmentSource}=require('./session-attachments');
+const {checkImageFiles}=require('./attachment-policy');
 // Cache only user-attached images. Content addressing keeps old messages stable when a source changes.
 class ImageCache{
   constructor(team){this.team=team;this.pending=new Map();this.root=path.join(team.data,'image-cache');this.tail=Promise.resolve();}
   async capture(file){
     if(file.kind!=='image'||!path.isAbsolute(file.path)||! /\.(png|jpe?g|webp|gif)$/i.test(file.path))return file;
+    if(!(await attachmentSource(this.team,file.path)).managed)return file;
     let stat;try{stat=await fs.stat(file.path);}catch(error){if(error.code==='ENOENT')return file;throw error;}if(!stat.isFile()||stat.size>20*1024*1024)throw Error('缓存的图片限 20 MB。');
     const bytes=await fs.readFile(file.path);if(bytes.length>20*1024*1024)throw Error('图片过大。');const hash=createHash('sha256').update(bytes).digest('hex'),ext=path.extname(file.path).toLowerCase(),dest=path.join(this.root,hash+ext);
     await fs.mkdir(this.root,{recursive:true});try{await fs.writeFile(dest,bytes,{flag:'wx'});}catch(e){if(e.code!=='EEXIST')throw e;}return {...file,path:dest,sourcePath:file.path,cacheHash:hash};
   }
   async prepare(job,bot){
+    await checkImageFiles(job.attachments||[]);
     const files=[];for(const file of job.attachments||[])files.push(await this.capture(file));job.attachments=files;
     const setting=this.team.state.integrations?.images||{},model=await this.team.model(bot),input=model.input||model.inputModalities||model.supportedInputs;
     const textOnly=setting.textOnlyModels?.includes(model.key)||(Array.isArray(input)&&input.includes('text')&&!input.includes('image'));
