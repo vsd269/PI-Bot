@@ -1,4 +1,5 @@
 'use strict';
+const {viewSummary}=require('./views');
 function linesOf(team,kind,id){
   const current=(kind==='room'?team.state.rooms:team.state.bots).some(item=>item.id===id);
   if(!current){const archived=(team.state.archives||[]).find(a=>a.kind===kind&&a.id===id);if(archived)return archived.lines||[];}
@@ -6,8 +7,8 @@ function linesOf(team,kind,id){
   const bot=team.bot(id);
   return [...(bot.chat||[]),...team.state.jobs.filter(j=>j.botId===id&&!j.roomId).flatMap(j=>[
     {id:j.id+':input',who:j.fromName||'User',attachmentJobId:j.id,attachments:j.attachments,text:j.sourceUserContent||j.task,at:j.at,reaction:j.reactions?.[j.id+':input']},
-    ...(j.result||j.error?[{id:j.id+':result',who:bot.name,text:j.result||j.error,at:j.endedAt||j.at,jobId:j.id,status:j.status,thinking:j.thinking,toolEvents:j.toolEvents,reaction:j.reactions?.[j.id+':result']}]:[])
-  ])].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+    ...(j.result||j.error?[{id:j.id+':result',who:bot.name,text:j.result||j.error,at:j.endedAt||j.at,jobId:j.id,status:j.status,durationMs:j.durationMs,thinking:j.thinking,toolEvents:j.toolEvents,reaction:j.reactions?.[j.id+':result']}]:[])
+  ]),...(team.state.views||[]).filter(view=>view.botId===id).map(view=>({id:'view:'+view.id,who:bot.name,at:view.at,text:'[交互卡片] '+view.title+'\n'+viewSummary(view.view)}))].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
 }
 function referenceText(team,references=[]){
   if(!Array.isArray(references)||references.length>5)throw new Error('最多引用 5 个聊天。');

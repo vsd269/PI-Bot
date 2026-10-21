@@ -24,7 +24,7 @@ export async function onLoad(pi){
   if(!alive){dispose();return;}
   pi.ui.injectStyle(RETURN_CSS);
   const mark=characterMarkup(MAIN_LOOK.shape,MAIN_LOOK.color).replaceAll(MASK_ID,'pi-return-'+nextMarkSerial());
-  dock=mountSidebarEntry(pi,{column:1,label:'PI-bot',markup:`<span class="bt-mark"><svg viewBox="0 0 ${shapeOf(MAIN_LOOK.shape).size} ${shapeOf(MAIN_LOOK.shape).size}">${mark}</svg></span>`,onClick:showBot,onPlacement:value=>placementListeners.forEach(listener=>listener(value))});
+  dock=mountSidebarEntry(pi,{label:'PI-bot',markup:`<span class="bt-mark"><svg viewBox="0 0 ${shapeOf(MAIN_LOOK.shape).size} ${shapeOf(MAIN_LOOK.shape).size}">${mark}</svg></span>`,onClick:showBot,onPlacement:value=>placementListeners.forEach(listener=>listener(value))});
   // The independent launcher and command remain usable if a host release
   // removes or renames this optional composer slot.
   try { pi.slots?.register?.({slot:'composerControl',positions:['left'],component:FallbackReturn}); } catch(error) { console.warn('[PI-bot] Optional composer slot unavailable:',error); }

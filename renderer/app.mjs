@@ -30,6 +30,7 @@ import {createBotPage} from './create-bot.mjs';
 import {createDrawerMotion} from './drawer-motion.mjs';
 import {createDetailsPreview} from './details-preview.mjs';
 import {createQuestions} from './questions.mjs';
+import {createViews} from './views.mjs';
 import {activityLabel,memberWork,createMemberDock} from './member-status.mjs';
 import {botSettingsMarkup,roomSettingsMarkup} from './settings-markup.mjs';
 import {attachAvatarMotion} from './avatar-motion.mjs';
@@ -38,6 +39,7 @@ import {createLiveResponses} from './live-responses.mjs';
 import {createStateSync} from './state-sync.mjs';
 import {createMemoryNotice} from './memory-notice.mjs';
 import {preserveTextSelection} from './text-selection.mjs';
+import {stampMessages} from './message-time.mjs';
 const statuses={queued:'等待本成员',launching:'启动中',running:'执行中',waiting:'待工具审批',waiting_teammates:'等待队友交回',completed:'已结束',not_started:'未执行',needs_review:'待检查',error:'失败',aborted:'已中断',interrupted:'启动被中断'};
 function readable(value){try{const parsed=JSON.parse(value);if(typeof parsed.reply==='string')return parsed.reply;}catch{}return value;}
 function avatar(bot,size=36,working=false,live=true,options={}){const span=mark(lookOf(bot),size,live,{id:bot?.id||'',...options});if(working)span.dataset.state=typeof working==='string'?working:'working';return span;}
@@ -89,6 +91,8 @@ export async function mount(target,invoke,onNative,embedded=false){
   const dictationView=createDictationView({host:app.querySelector('.composer-wrap'),button:$('dictate'),onStop:()=>voice.toggle(),onCancel:()=>voice.stop(),enabled:()=>!closed&&!target.inert&&target.getBoundingClientRect().width>0&&getComputedStyle(target).display!=='none'});
   const microphoneSettings=createMicrophoneSettings({host:app,call,notice});const openMicrophone=()=>void microphoneSettings.open();app.addEventListener('pi-microphone-setup',openMicrophone);
   let voiceView=createVoiceView({host:app.querySelector('.conversation'),getTarget:()=>selected,getState:()=>state,avatar,cluster,onPause:()=>voice.pause(),onClose:()=>voice.stop(),onSetup:()=>features.extensions(selected?.kind==='bot'?selected.id:undefined).catch(()=>{})});
+  const chatViews=()=>(state.views||[]).filter(view=>!view.roomId&&selected?.kind==='bot'&&view.botId===selected.id);
+  const viewsUI=createViews({app,getViews:chatViews,answer:async input=>{await call('team.view.answer',input);await refresh();},nameOf:id=>bot(id)?.name||'Bot',onError:error=>notice(error.message||String(error))});
   const voiceMode=event=>{if(event.detail===false){voice.stop();microphoneSettings.close();}};window.addEventListener('pi-bot:mode',voiceMode);
   $('dictate').onclick=()=>voice.toggle();$('continuous-voice').onclick=()=>voice.continuous();
   $('extensions-item').onclick=()=>{menuVisible($('settings-menu'),false);features.extensions(selected?.kind==='bot'?selected.id:undefined).catch(()=>{});};
@@ -126,7 +130,7 @@ export async function mount(target,invoke,onNative,embedded=false){
     }
     return [...(item?.chat||[]),...state.jobs.filter(j=>j.botId===item?.id&&!j.roomId&&!j.handoffRootId).flatMap(j=>{
       const partial=liveResponses.progress(j)||j.progress;
-      return [{id:j.id+':input',who:j.fromName||'User',attachmentJobId:j.id,attachments:j.attachments,text:j.task,at:j.at,reaction:j.reactions?.[j.id+':input']},{id:j.id+':result',who:item.name,navigationReply:Boolean(j.result||partial||j.error),text:j.result||partial||j.error||statuses[j.status],progress:Boolean(partial&&!j.result&&['launching','running','waiting'].includes(j.status)),at:j.endedAt||j.at,status:j.status,thinking:j.thinking,toolEvents:j.toolEvents,reaction:j.reactions?.[j.id+':result']}];
+      return [{id:j.id+':input',who:j.fromName||'User',attachmentJobId:j.id,attachments:j.attachments,text:j.sourceUserContent||j.task,at:j.at,reaction:j.reactions?.[j.id+':input']},{id:j.id+':result',who:item.name,navigationReply:Boolean(j.result||partial||j.error),text:j.result||partial||j.error||statuses[j.status],progress:Boolean(partial&&!j.result&&['launching','running','waiting'].includes(j.status)),at:j.endedAt||j.at,durationMs:j.durationMs,status:j.status,thinking:j.thinking,toolEvents:j.toolEvents,reaction:j.reactions?.[j.id+':result']}];
     })].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
   };
   const busy=id=>Boolean(bot(id)?.planning)||state.jobs.some(j=>j.botId===id&&['running','waiting','launching'].includes(j.status));
@@ -181,8 +185,8 @@ export async function mount(target,invoke,onNative,embedded=false){
       entries.sort((a,b)=>Number(Boolean(b.item.pinned))-Number(Boolean(a.item.pinned))||String(b.item.log?.at(-1)?.at||b.item.chat?.at(-1)?.at||'').localeCompare(String(a.item.log?.at(-1)?.at||a.item.chat?.at(-1)?.at||'')));
       for(const entry of entries)$('list').append(row(entry.kind,entry.item));listMotion.after(beforeList);
     }
-    const news=memoryNotice.latest(selected?.kind==='room'?(item?.members||[]):item?[item.id]:[]);memoryTarget=news?.id||null;
-    $('title').setAttribute('aria-label',news?'记忆已更新，打开 '+(bot(news.id)?.name||'Bot')+' 的记忆':'查看会话详情');$('title').toggleAttribute('data-memory',Boolean(news));
+    const news=memoryNotice.latest(item?[item.id]:[]);memoryTarget=news?.id||null;
+    $('title').setAttribute('aria-label',news?'记忆已更新，打开 '+item.name+' 的记忆':'查看会话详情');$('title').toggleAttribute('data-memory',Boolean(news));
     const nextTitle=JSON.stringify([news?.at,selected,item?.name,item?.avatar,item?.color,item?.members?.map(id=>{const b=bot(id);return [id,b?.avatar,b?.color];})]);
     if(nextTitle!==titleKey){titleKey=nextTitle;$('title').replaceChildren();if(item){$('title').append(selected.kind==='room'?cluster(item):avatar(item,24,busy(item.id)),el('span',item.name,'bt-pill-name'));}
       else $('title').textContent='PI-bot';
@@ -196,9 +200,9 @@ export async function mount(target,invoke,onNative,embedded=false){
     memberDock.render(state,selected);
     outbox.reconcile(state);
     const lines=[...chatLines(selected?.kind,item),...outbox.lines(selected)].sort((a,b)=>String(a.at).localeCompare(String(b.at))).map(line=>({...line,text:readable(line.text)}));
-    const questions=chatQuestions();
-    const nextChat=JSON.stringify([selected,lines,item?.planning,questions,state.bots.map(b=>[b.id,b.name,b.avatar,b.color])]);
-    const nextShape=JSON.stringify([selected,lines.map(l=>l.progress?{...l,text:null}:l),item?.planning,questions,state.bots.map(b=>[b.id,b.name,b.avatar,b.color])]);
+    const questions=chatQuestions(),views=chatViews();
+    const nextChat=JSON.stringify([selected,lines,item?.planning,questions,views,state.bots.map(b=>[b.id,b.name,b.avatar,b.color])]);
+    const nextShape=JSON.stringify([selected,lines.map(l=>l.progress?{...l,text:null}:l),item?.planning,questions,views,state.bots.map(b=>[b.id,b.name,b.avatar,b.color])]);
     const restoreSelection=nextChat!==chatKey&&transcriptSelection===selected?.kind+':'+selected?.id?preserveTextSelection($('transcript')):()=>{};
     if(nextChat!==chatKey&&nextShape===streamShape){
       const scrollView=transcriptNavigation.beforeRender(selected?.kind+':'+selected?.id,lines);
@@ -208,19 +212,20 @@ export async function mount(target,invoke,onNative,embedded=false){
       }
       chatKey=nextChat;transcriptNavigation.afterRender(scrollView);
     }else if(nextChat!==chatKey){streamShape=nextShape;
-      const animationKey=selected?.kind+':'+selected?.id,freshConversation=animationSelection!==animationKey;if(freshConversation){seenLines.clear();animationSelection=animationKey;}const active=shadow.activeElement,focus=active?.closest?.('[data-question-id]'),focusState=focus&&active.matches('textarea')?{id:focus.dataset.questionId,start:active.selectionStart,end:active.selectionEnd}:null;const scroller=$('chat');chatKey=nextChat;const selection=selected?.kind+':'+selected?.id;const scrollView=transcriptNavigation.beforeRender(selection,lines);if(transcriptSelection===selection){for(const node of $('transcript').querySelectorAll('details[data-key]')){if(node.open)expandedDetails.add(node.dataset.key);else expandedDetails.delete(node.dataset.key);}}else{expandedDetails.clear();transcriptSelection=selection;}$('transcript').replaceChildren();
-      if(!lines.length){const empty=el('div','','empty-state');empty.append(avatar(item?.role?item:state.bots.find(b=>b.role==='Administrator'),72),el('h1',item?.name||'PI-bot'),el('p',selected?.kind==='room'?'发送任务，让管理员分工给执行成员。也可以 @成员名 或 @all。':'发送消息，开始与机器人协作。'));$('transcript').append(empty);}
+      const animationKey=selected?.kind+':'+selected?.id,freshConversation=animationSelection!==animationKey;if(freshConversation){seenLines.clear();animationSelection=animationKey;}const active=shadow.activeElement,focus=active?.closest?.('[data-question-id],[data-view-id]'),focusState=focus&&active.matches('textarea,input')?{id:focus.dataset.questionId,viewId:focus.dataset.viewId,name:active.name,action:active.dataset.viewAction,value:active.value,start:active.selectionStart,end:active.selectionEnd}:null;const scroller=$('chat');chatKey=nextChat;const selection=selected?.kind+':'+selected?.id;const scrollView=transcriptNavigation.beforeRender(selection,lines);if(transcriptSelection===selection){for(const node of $('transcript').querySelectorAll('details[data-key]')){if(node.open)expandedDetails.add(node.dataset.key);else expandedDetails.delete(node.dataset.key);}}else{expandedDetails.clear();transcriptSelection=selection;}$('transcript').replaceChildren();
+      if(!lines.length&&!questions.length&&!views.length){const empty=el('div','','empty-state');empty.append(avatar(item?.role?item:state.bots.find(b=>b.role==='Administrator'),72),el('h1',item?.name||'PI-bot'),el('p',selected?.kind==='room'?'发送任务，让管理员分工给执行成员。也可以 @成员名 或 @all。':'发送消息，开始与机器人协作。'));$('transcript').append(empty);}
       if(lines.length)$('transcript').append(el('div',new Date(lines[0].at).toLocaleString(),'bt-time-sep'));
-      for(const line of [...lines,...questions.map(question=>({question,at:question.at}))].sort((a,b)=>String(a.at).localeCompare(String(b.at)))){
+      for(const line of [...lines,...questions.map(question=>({question,at:question.at})),...views.map(view=>({view,at:view.at}))].sort((a,b)=>String(a.at).localeCompare(String(b.at)))){
+        if(line.view){$('transcript').append(viewsUI.render(line.view));continue;}
         if(line.question){$('transcript').append(questionsUI.render(line.question));continue;}
         if(line.who==='User'){const wrap=el('div','','bt-urow'),bubble=el('div','','bt-ububble');wrap.dataset.lineId=line.id;if(!freshConversation&&!seenLines.has(line.jobId||line.id))wrap.dataset.btEnter='new'; bubble.append(foldMessage(line.text,()=>userQuote(line.text,mentionMarkup),false,1500));appendAttachments(bubble,line);wrap.append(bubble);if(line.delivery){const status=el('div',line.delivery==='failed'?'发送失败':line.delivery==='received'?'已接收':'发送中…','delivery-status');if(line.delivery==='failed'){status.title=line.error||'';const retry=el('button','重试');retry.type='button';retry.onclick=()=>outbox.retry(line.id);const remove=el('button','删除');remove.type='button';remove.title='移除这条发送失败的本地消息';remove.onclick=()=>outbox.discard(line.id);status.append(retry,remove);status.classList.add('message-error');}wrap.append(status);}else wrap.append(messageActions(line.text,line));if(line.reaction)bubble.append(reactionPill(line));$('transcript').append(wrap);continue;}
         const wrap=el('div','','bt-group-msg'),author=bot(line.botId)||state.bots.find(b=>b.name===line.who);wrap.dataset.lineId=line.id;if(!freshConversation&&!seenLines.has(line.jobId||line.id))wrap.dataset.btEnter='new';const nameLine=el('div','','bt-group-name');nameLine.style.color=inkTextOf(author);nameLine.append(line.who+(line.coordinator?' · 管理员':''));wrap.append(nameLine);const msg=el('div','','bt-msg-line');const bubble=el('div','','bt-bubble');bubble.append(foldMessage(line.text,()=>markdown(line.text,mentionMarkup,href=>call('team.file.open',{kind:selected.kind,id:selected.id,lineId:line.id,href}).catch(()=>{})),Boolean(line.progress),selected?.kind==='bot'&&line.who===item.name?20000:1500));const assigned=assignmentMarkup(line);if(assigned)bubble.append(assigned);msg.append(messageAvatar(author|| (selected?.kind==='bot'?item:null)),bubble);if(!line.progress)msg.append(messageActions(line.text,line));wrap.append(msg);if(line.thinking){const details=el('details','','thinking-block');details.dataset.key=line.id+':thinking';details.open=expandedDetails.has(details.dataset.key);details.append(el('summary','思考过程'),Object.assign(el('div',line.thinking),{className:'pi-reasoning-lines'}));wrap.append(details);}if(line.toolEvents?.length){const tools=el('details','','thinking-block');tools.dataset.key=line.id+':tools';tools.open=expandedDetails.has(tools.dataset.key);tools.append(el('summary','工具记录 · '+line.toolEvents.length));for(const event of line.toolEvents){const entry=el('div');entry.append(el('div',event.name+' · '+event.status));if(event.detail)entry.append(el('pre',event.detail));tools.append(entry);}wrap.append(tools);}if(line.reaction)bubble.append(reactionPill(line));if(line.status)wrap.append(el('div',statuses[line.status]||line.status,'message-status'+(['error','not_started','needs_review'].includes(line.status)?' message-error':'')));$('transcript').append(wrap);
       }
       if(item?.planning)$('transcript').append(el('div','管理员正在安排分工…','typing-line'));
-      if(focusState){const card=[...$('transcript').querySelectorAll('[data-question-id]')].find(n=>n.dataset.questionId===focusState.id),field=card?.querySelector('textarea');if(field){field.focus({preventScroll:true});field.setSelectionRange(focusState.start,focusState.end);}}
+      if(focusState){const card=[...$('transcript').querySelectorAll('[data-question-id],[data-view-id]')].find(n=>focusState.viewId?n.dataset.viewId===focusState.viewId:n.dataset.questionId===focusState.id),field=focusState.viewId?[...(card?.querySelectorAll('input')||[])].find(n=>n.name===focusState.name&&n.dataset.viewAction===focusState.action&&(focusState.start!==null||n.value===focusState.value)):card?.querySelector('textarea');if(field){field.focus({preventScroll:true});if(focusState.start!==null)field.setSelectionRange(focusState.start,focusState.end);}}
       seenLines=new Set(lines.map(line=>line.jobId||line.id));transcriptNavigation.afterRender(scrollView);
     }
-    restoreSelection();
+    stampMessages($('transcript'),lines);restoreSelection();
     if(!$('task-drawer').hidden)renderJobs();
     stopAvatarMotion.sync(state);
   }
@@ -505,6 +510,7 @@ export async function mount(target,invoke,onNative,embedded=false){
     const folder=el('button','工作目录：'+(item.workDir||'跟随 PI 当前工作区'),'bt-more');folder.onclick=()=>editRoom(item);body.append(folder);
     const permissions={inherit:'跟随 PI 设置',ask:'操作前询问','accept-edits':'自动接受编辑',auto:'自动批准'};
     const permission=el('button','权限：'+(item.permissionMode!=null?'所有成员 · '+permissions[item.permissionMode]:'成员各自的 PI 权限'),'bt-more');permission.type='button';permission.onclick=()=>editRoom(item);body.append(permission);
+    const groupMemory=el('button','群聊记忆','bt-more');groupMemory.type='button';groupMemory.onclick=()=>features.memory(item,{group:true}).catch(error=>notice(error.message));body.append(groupMemory);
     if(selected.kind==='room'){
       const members=el('div','','bt-members');
       members.append(el('div','成员 · '+item.members.length,'bt-section-title'));
@@ -557,7 +563,7 @@ export async function mount(target,invoke,onNative,embedded=false){
   }
   function closeDetails(){drawer.set(false);}
   $('detail-browser').onclick=()=>{const item=current();if(selected?.kind==='bot'&&item)features.openBrowser(item).catch(()=>{});};
-  $('title').onclick=()=>{if(memoryTarget&&bot(memoryTarget)){features.memory(bot(memoryTarget)).catch(error=>notice(error.message));return;}if(editing)closeSettings();drawer.set(!drawer.isOpen());if(drawer.isOpen())renderDetails();};$('close-details').onclick=closeDetails;$('close-tasks').onclick=()=>{$('task-drawer').hidden=true;};
+  $('title').onclick=()=>{if(memoryTarget&&current()){features.memory(current(),{group:selected?.kind==='room'}).catch(error=>notice(error.message));return;}if(editing)closeSettings();drawer.set(!drawer.isOpen());if(drawer.isOpen())renderDetails();};$('close-details').onclick=closeDetails;$('close-tasks').onclick=()=>{$('task-drawer').hidden=true;};
   $('share').onclick=async()=>{const item=current();const lines=chatLines(selected.kind,item);try{await navigator.clipboard.writeText(lines.map(l=>'**'+l.who+':** '+readable(l.text)).join('\n\n'));}catch(error){notice(error.message);}};
   function setPlus(open){
     const node=$('plus-menu'),anchor=$('plus'),r=anchor.getBoundingClientRect();anchor.setAttribute('aria-expanded',String(open));
@@ -610,7 +616,7 @@ export async function mount(target,invoke,onNative,embedded=false){
   const stopShortcuts=createChatShortcuts({enabled:interactive,isModal:()=>Boolean(app.querySelector('dialog[open],.pi-new-chat:not([hidden]),.bt-avedit')),actions:{search:()=>chatSearch.open(),find:()=>chatSearch.find(),sidebar:()=>setSidebar(!app.hasAttribute('data-sidebar-collapsed')),newChat:()=>newChat.show(),settings:()=>features.settings('general').catch(()=>{}),quote:()=>textQuote.quote(),focus:()=>$('content').focus(),send:()=>$('send').requestSubmit(),move:delta=>{const chats=visibleChats(),index=chats.findIndex(c=>c.kind===selected?.kind&&c.id===selected?.id),next=chats[(index+delta+chats.length)%chats.length];if(next)select(next.kind,next.id);},index:index=>{const next=visibleChats()[index];if(next)select(next.kind,next.id);}}});
   const updateNotice=createUpdateNotice({host:app.querySelector('.bt-side-top'),before:$('search-toggle'),call:invoke,openAbout:()=>features.settings('about').catch(()=>{})});
   bootstrap();let lastRefresh=0;const timer=setInterval(()=>{const active=state.jobs.some(j=>['queued','launching','running','waiting'].includes(j.status));if(Date.now()-lastRefresh>=(active?450:2400)){lastRefresh=Date.now();refresh().catch(()=>{});}},500);
-  const dispose=()=>{closed=true;updateNotice.dispose();stopShortcuts();chatSearch.dispose();textQuote.dispose();activeRead.dispose();liveResponses.close();memoryNotice.close();document.removeEventListener('keydown',menuKey,true);stopAvatarMotion.dispose();memberDock.dispose();listMotion.dispose();window.removeEventListener('pi-bot:mode',voiceMode);voice.dispose();voiceView.dispose();dictationView.dispose();microphoneSettings.dispose();app.removeEventListener('pi-microphone-setup',openMicrophone);clearInterval(timer);clearTimeout(appearanceFrame);drawer.dispose();detailsPreview.dispose();newChat.dispose();botCreator.dispose();preferenceSaver.close();stopTheme();questionsUI.close();transcriptNavigation.close();closeAvatarEditor();pickers.dispose();contextMenu.dispose();stopScrollReveal();stopUnread();appearanceSaver.close().catch(()=>{});try{features.close();}finally{interactionMotion.dispose();target.replaceChildren();}};
+  const dispose=()=>{closed=true;updateNotice.dispose();stopShortcuts();chatSearch.dispose();textQuote.dispose();activeRead.dispose();liveResponses.close();memoryNotice.close();document.removeEventListener('keydown',menuKey,true);stopAvatarMotion.dispose();memberDock.dispose();listMotion.dispose();window.removeEventListener('pi-bot:mode',voiceMode);voice.dispose();voiceView.dispose();dictationView.dispose();microphoneSettings.dispose();app.removeEventListener('pi-microphone-setup',openMicrophone);clearInterval(timer);clearTimeout(appearanceFrame);drawer.dispose();detailsPreview.dispose();newChat.dispose();botCreator.dispose();preferenceSaver.close();stopTheme();questionsUI.close();viewsUI.close();transcriptNavigation.close();closeAvatarEditor();pickers.dispose();contextMenu.dispose();stopScrollReveal();stopUnread();appearanceSaver.close().catch(()=>{});try{features.close();}finally{interactionMotion.dispose();target.replaceChildren();}};
   dispose.workspaceSession=()=>{if(!selected)return null;const item=selected?.kind==='bot'?state.bots.find(b=>b.id===selected.id):null;return item?.sessions?.private||state.jobs.findLast(j=>(selected?.kind==='room'?j.roomId===selected.id:j.botId===selected?.id)&&j.sessionId)?.sessionId||null;};
   return dispose;
 }

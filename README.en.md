@@ -8,7 +8,9 @@ PI Bot is an independently maintained adaptation of [DeepSeek-Bot](https://githu
 
 - Persistent private chats and Bot groups, administrator delegation, serial or parallel group execution.
 - Streaming message updates, references, text selection, chat search and history.
-- Per-Bot file-backed memory and configurable model-assisted memory extraction.
+- Separate file-backed memory for each Bot and group, with configurable model-assisted memory extraction.
+- Private-chat cards for text, metrics, tables, progress, choices, confirmations and short forms; requires model tool support.
+- Local message times and reply durations from recorded measurements.
 - Local Skill import, shared capability packs and batch assignment to multiple Bots.
 - GitHub integration and explicitly authorized per-Bot local / remote MCP connectors.
 - Voice input, live transcription conversations, input device selection and recording status.

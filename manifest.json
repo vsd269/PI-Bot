@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "local.pi-bot",
   "name": "PI Bot",
-  "version": "0.3.81",
+  "version": "0.3.82",
   "description": "Persistent PI-bot teams with serial or parallel group execution, memory, capabilities and local schedules.",
   "author": "vsd269 · PI Desktop adaptation; based on Fei2411/DeepSeek-Bot",
   "homepage": "https://github.com/vsd269/PI-Bot",

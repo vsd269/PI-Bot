@@ -1,5 +1,6 @@
 'use strict';
 const {createQuestion}=require('./questions');
+const {createView}=require('./views');
 const {postToGroup}=require('./group-actions');
 const {createBotFrom,createGroupFrom}=require('./roster-actions');
 const {linesOf}=require('./history');
@@ -25,6 +26,7 @@ async function installTools(team){
   }
   const find=name=>{const bots=team.state.bots.filter(b=>b.name===name||b.id===name);if(bots.length!==1)throw new Error('No unique Bot named '+name);return bots[0];};
   const visible=(owner,room)=>owner.bot.role==='Administrator'||room.members.includes(owner.bot.id);
+  await register('show_view','Show a view card in your private chat: text, metric, table, progress, options, confirm or a short form. Interactive cards end your turn; answers arrive later as a new assignment. Keep the title and view under 8 KB. Never collect keys, tokens or passwords; use request_secret.',{title:field('Short card title'),view:{type:'object',additionalProperties:true,description:'A component {type,...props}. stack: children[1..16]; text: text; metric: label,value,tone? (good/warn/bad); table: columns[{key,label}],rows as arrays of cells; progress: percent[0..100],label?; options: id,options[{label,description?}],multi?; confirm: id,confirmLabel?,cancelLabel?; form: id,fields[{id,label,placeholder?}],submitLabel?. Only declared props; no code/HTML.'},await_reply:{type:'boolean',description:'Defaults to true for interactive cards and false for display-only cards.'}},['title','view'],async(args,owner,ctx)=>createView(team,args,owner,ctx),'medium');
   await register('list_bots','List PI-bot members, their roles and current task statuses, and your visible groups.',{},[],async(_,owner)=>JSON.stringify({bots:team.state.bots.map(b=>({id:b.id,name:b.name,role:b.role,roleLabel:b.roleLabel,instructions:b.instructions,modelKey:b.modelKey,activity:team.handoffs.activity(b),status:team.state.jobs.filter(j=>j.botId===b.id&&team.active(j)).map(j=>({id:j.id,status:j.status,task:j.task.slice(0,250)}))})),groups:team.state.rooms.filter(r=>visible(owner,r)).map(r=>({id:r.id,name:r.name,notice:r.notice,members:r.members,adminId:r.adminId,executionMode:r.executionMode,replyMode:r.replyMode}))}));
   await register('list_models','List models configured and available in PI-Desktop and their thinking levels.',{},[],async()=>JSON.stringify(await team.models()));
   await register('message_bot','Send a self-contained message to another PI-bot. It queues after that member\'s current assignment. Do not wait in a loop. The response returns later, or goes to the user when reply_to=user.',{to:field('Exact Bot name'),message:field('Task, question or information'),reply_to:{type:'string',enum:['me','user']},when:{type:'string',enum:['now','queue']}},['to','message'],async(args,owner,ctx)=>{

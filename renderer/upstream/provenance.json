@@ -74,6 +74,18 @@
       "schedules.js": "e440459ba6fe3c5cabb3136ad81c087a07bcb5a184597b52a7c60fab91446ae2"
     }
   },
+  "migration0382": {
+    "date": "2026-10-21",
+    "version": "0.2.0",
+    "basePiBotVersion": "0.3.81",
+    "license": "Apache-2.0",
+    "source": "User-provided DeepSeek-Bot 0.2.0 source archive; commit not verified",
+    "referenceSha256": {
+      "ds-bot/src/host/memory.js": "60b7d7d6f3318181f0018a24bfad1965df299f43d6d83a59c1c912a811802f0c",
+      "ds-bot/src/shared/views.js": "25886733673a7fa125d686c322887eed85af5ba1ef91f1dfa76d1d1025b17e08"
+    },
+    "adaptation": "Group-scoped memory retains upstream storage, review, panel and archive logic with PI model, session ownership and lifecycle adapters. Shared view validation is copied into ESM and mechanically converted to CommonJS. Native PI show_view registration, persisted answers, renderer cards and message timing are platform adaptations. Interactive cards are private-chat only. Historical provenance is retained."
+  },
   "motion0352": {
     "date": "2026-10-17",
     "version": "0.1.7",

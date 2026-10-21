@@ -129,21 +129,24 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
     let anchor;for(const line of view.lines||[]){const row=el('section','','feature-card');row.append(el('strong',line.who||''),el('p',line.text||''),el('small',new Date(line.at).toLocaleString()));if(line.id===result.lineId){anchor=row;row.dataset.searchMatch='true';}body.append(row);}
     anchor?.scrollIntoView({block:'center',behavior:'instant'});
   }
-  async function memory(bot){
+  async function memory(bot,{group=false}={}){
     if(!bot?.id){notice('请先保存机器人，再管理记忆。');return;}
-    const token=show(bot.name+' · 长期记忆');
+    const target=group?{roomId:bot.id}:{botId:bot.id};
+    const token=show(bot.name+(group?' · 群聊记忆':' · 长期记忆'));
+    const panel=el('section','','pi-memory-panel');body.append(panel);
+    if(group)panel.append(el('p','仅本群成员在此群聊中读取和更新这些记忆；不会自动写入其他群聊或私聊。历史上已保存到机器人或团队的条目不会被自动移动。','feature-note'));
     const summary=el('div','','feature-card'),entries=el('div'),text=el('textarea');text.placeholder='询问已保存的记忆，或说明要增加、纠正、删除的内容';text.rows=3;
-    const scope=select([['own','机器人记忆'],['team','团队共享记忆']]);const topic=input('主题（可留空）');
+    const scope=select(group?[['group','本群共享记忆']]:[['own','机器人记忆'],['team','团队共享记忆']]);const topic=input('主题（可留空）');
     const draw=async(regenerate=false)=>{
-      const view=await call('team.memory.view',{botId:bot.id,summarize:true,regenerate});if(token!==generation||!dialog.open)return;
+      clearTimeout(memoryTimer);const view=await call('team.memory.view',{...target,summarize:true,regenerate});if(token!==generation||!dialog.open)return;
       summary.replaceChildren(el('strong','记忆摘要'),el('p',view.summary?.text||(view.summarizing?'正在生成摘要…':'尚无摘要。')));if(view.error)summary.append(el('p',view.error,'message-error'));
-      summary.append(el('small','机器人 '+view.sizes.own+' / '+view.limits.main+' 字符；团队 '+view.sizes.team+' 字符'));
-      entries.replaceChildren();for(const entry of view.entries){const row=el('section','','feature-card');row.append(el('small',(entry.scope==='team'?'团队':'机器人')+(entry.topic?' · '+entry.topic:'')+' · '+(entry.added||'')),el('p',entry.text));const remove=button('删除',async()=>{if(remove.dataset.confirm!=='yes'){remove.dataset.confirm='yes';remove.textContent='确认删除';return;}await call('team.memory.forget',{botId:bot.id,scope:entry.scope,text:entry.text,topic:entry.topic});await draw();});row.append(remove);entries.append(row);}
+      summary.append(el('small',group?'本群 '+view.sizes.group+' / '+view.limits.main+' 字符':'机器人 '+view.sizes.own+' / '+view.limits.main+' 字符；团队 '+view.sizes.team+' 字符'));
+      entries.replaceChildren();for(const entry of view.entries){const row=el('section','','feature-card');row.append(el('small',({team:'团队',group:'本群',own:'机器人'}[entry.scope]||'机器人')+(entry.topic?' · '+entry.topic:'')+' · '+(entry.added||'')),el('p',entry.text));const remove=button('删除',async()=>{if(remove.dataset.confirm!=='yes'){remove.dataset.confirm='yes';remove.textContent='确认删除';return;}await call('team.memory.forget',{...target,scope:entry.scope,text:entry.text,topic:entry.topic});await draw();});row.append(remove);entries.append(row);}
       if(!view.entries.length)entries.append(el('p','尚无记忆。'));
       if(view.summarizing)memoryTimer=setTimeout(()=>draw().catch(()=>{}),1200);
     };
-    body.append(summary,button('重新生成摘要',()=>draw(true)),entries,label('记忆范围',scope),label('主题',topic),text);
-    body.append(button('添加条目',async()=>{await call('team.memory.add',{botId:bot.id,text:text.value,scope:scope.value,topic:topic.value||undefined});text.value='';await draw();}),button('询问或更新记忆',async()=>{const reply=await call('team.memory.ask',{botId:bot.id,text:text.value});notice(reply.reply||reply.text||JSON.stringify(reply));text.value='';await draw();}));
+    panel.append(summary,button('重新生成摘要',()=>draw(true)),entries,label('记忆范围',scope),label('主题',topic),text);
+    panel.append(button('添加条目',async()=>{await call('team.memory.add',{...target,text:text.value,scope:scope.value,topic:topic.value||undefined});text.value='';await draw();}),button('询问或更新记忆',async()=>{const reply=await call('team.memory.ask',{...target,text:text.value});notice(reply.reply||reply.text||JSON.stringify(reply));text.value='';await draw();}));
     await draw();
   }
   async function backups(){

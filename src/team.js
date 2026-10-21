@@ -10,6 +10,7 @@ const {linesOf,referenceText,searchHistory}=require('./history');
 const {usageDashboard}=require('./usage');
 const {Capabilities}=require('./capabilities');
 const {answerQuestion,deliverQuestion}=require('./questions');
+const {answerView,deliverView,supersedeViews}=require('./views');
 const {deliverRoundReports}=require('./group-reports');
 const {postToGroup}=require('./group-actions');
 const {createBotFrom,createGroupFrom,archiveChat,deliverKickoffs}=require('./roster-actions');
@@ -52,7 +53,10 @@ function planningContext(team, bot, sessionId) {
   // context for a delegation decision. Sending a full Skill/history payload
   // here makes group planning latency vary with local data size.
   const raw = team.context(bot, sessionId);
-  return raw.length > 12000 ? raw.slice(0, 12000) + '\n[其余能力说明已省略，执行成员会在任务阶段读取。]' : raw;
+  if(raw.length<=12000)return raw;
+  const groupAt=raw.indexOf('## Group memory, shared by the members of this group chat');
+  if(groupAt>=0){const group=raw.slice(groupAt,groupAt+6000);return raw.slice(0,11900-group.length)+'\n[其余能力说明已省略；本群记忆如下。]\n'+group;}
+  return raw.slice(0,12000)+'\n[其余能力说明已省略，执行成员会在任务阶段读取。]';
 }
 function planningWorkers(team, workers) {
   return workers.map(bot => ({
@@ -100,7 +104,7 @@ class Team {
     // instruction. Remove that exact legacy value from workers so planning
     // cannot mistake an execution member for the coordinator.
     for(const bot of this.state.bots)if(bot.role!=='Administrator'&&bot.instructions==='Coordinate the team.')bot.instructions='';
-    this.state.completions??=[];this.state.questions??=[];this.state.prefs??={theme:'deepseek',motion:'normal'};
+    this.state.completions??=[];this.state.questions??=[];this.state.views??=[];this.state.prefs??={theme:'deepseek',motion:'normal'};
     this.state.unattended??={sent:0};this.state.archives??=[];
     if(!Number.isInteger(this.state.unattended.sent)||this.state.unattended.sent<0)this.state.unattended.sent=0;
     for(const room of this.state.rooms){room.executionMode??='parallel';room.replyMode??='admin';for(const report of room.reports||[])if(!report.roundId&&!report.replyDelivered&&!report.error)report.error='重启中断了群聊派发，请检查聊天记录后再发起。';}
@@ -312,16 +316,18 @@ class Team {
     if(this.state.rooms.some(room=>room.adminId===id))throw new Error('Change the group administrator before deleting this member.');
     const ownJobs=this.state.jobs.filter(j=>j.botId===id&&this.active(j));for(const job of ownJobs){try{await this.cancel(job.id);}catch{}job.cancelled=true;job.status='aborted';job.error='该 Bot 已被删除，任务未完成。';job.endedAt=new Date().toISOString();this.waiters.get(job.id)?.();this.waiters.delete(job.id);await this.handoffs.settled(job);await this.deliverResult(this.handoffs.root(job));if(job.roomId){const room=this.state.rooms.find(r=>r.id===job.roomId);if(room)this.publishResult(room,job);}}
     let pending;do{pending=this.writes;await pending;}while(pending!==this.writes);
-    const edit=new StateEdit(),githubRemoved=this.state.github?.ownerId===id;
+    const edit=new StateEdit(),githubRemoved=this.state.github?.ownerId===id,previousRooms=[...this.state.rooms];
     const archive=archiveChat(this,'bot',deleting);edit.undo.push(()=>{this.state.archives=this.state.archives.filter(a=>a!==archive);});
     edit.remove(this.state,'bots',b=>b.id===id);
     edit.remove(this.state,'schedules',t=>t.targetKind==='bot'&&t.targetId===id);
     edit.remove(this.state,'questions',q=>q.botId===id);
+    edit.remove(this.state,'views',view=>view.botId===id);
     cleanupRoster(this.state,edit);
     await this.commitEdit(edit);const visible=compact?{deleted:id}:this.snapshot();
     // Resource cleanup begins only after the deletion is durable and never
     // delays the visible response. Each cleanup remains independent on failure.
     const cleanup=run=>this.track(Promise.resolve().then(run).catch(error=>{this.integrations?.record?.('roster','cleanup_failed');}));
+    for(const room of previousRooms.filter(room=>!this.state.rooms.includes(room)))cleanup(()=>this.memory?.archiveGroup?.(room));
     cleanup(()=>this.memory?.archive(id,deleting));cleanup(()=>this.bridge?.disconnectBot(id));
     cleanup(()=>this.integrations?.browser?.stop(id));cleanup(()=>this.integrations?.stopBot?.(id));
     cleanup(()=>this.integrations?.configureApi?.());
@@ -342,6 +348,7 @@ class Team {
   deleteRoom(id,compact=false){return this.rosterChange(()=>this.removeRoom(id,compact));}
   async removeRoom(id,compact=false){
     const room=this.room(id);
+    const memoryRoom=this.memory?.rt.roomOf?.(id)||room;
     if(this.roomBusy(room))throw new Error('Wait for this group to finish before deleting it.');
     const index=this.state.rooms.indexOf(room),schedules=(this.state.schedules||[]).filter(t=>t.targetKind==='room'&&t.targetId===id),questions=(this.state.questions||[]).filter(q=>q.roomId===id),sessions=[];
     const archive=archiveChat(this,'room',room);
@@ -359,6 +366,7 @@ class Team {
       for(const {bot,entry} of sessions){bot.sessions[id]??=entry.sessionId;bot.sessionArchive=bot.sessionArchive.filter(item=>item!==entry);}
       throw error;
     }
+    if(this.memory?.archiveGroup)this.track(this.memory.archiveGroup(memoryRoom)).catch(error=>{(this.state.diagnostics??=[]).push({at:new Date().toISOString(),message:'群聊记忆归档失败：'+error.message});});
     return compact?{deleted:id}:this.snapshot();
   }
   log(room,who,text,extra={}){room.log.push({id:randomUUID(),at:new Date().toISOString(),who,text,botId:this.state.bots.find(b=>b.name===who)?.id,...extra});}
@@ -416,7 +424,7 @@ class Team {
       await this.save();
       if(!admin||all||explicit.length||room.replyMode==='everyone')plan={reply:workers.length?'任务已派发给执行成员。':'请先加入执行成员。',assignments:(all||(!admin||room.replyMode==='everyone')&&!explicit.length?workers:explicit).map(b=>({botId:b.id,task:content}))};
       else {
-        const prompt=ADMIN_RULES+'\n\n'+planningContext(this,admin,admin.sessions?.[room.id])+'\n\nGroup planning input (JSON data):\n'+JSON.stringify({request:content,notice:String(room.notice||'').slice(0,2000),workers:planningWorkers(this,workers),group:{id:room.id,name:room.name,members:room.members,adminId:room.adminId},recent:planningRecent(room)});
+        const prompt=ADMIN_RULES+'\n\n'+planningContext(this,admin,admin.sessions?.[room.id]||'group-admin:'+room.id+':'+admin.id)+'\n\nGroup planning input (JSON data):\n'+JSON.stringify({request:content,notice:String(room.notice||'').slice(0,2000),workers:planningWorkers(this,workers),group:{id:room.id,name:room.name,members:room.members,adminId:room.adminId},recent:planningRecent(room)});
         const response=await this.nativePlan(room,admin,prompt,planningId,startedAt);
         plan=parsePlan(response.text,workers);plan.usageId=response.usageId;
       }
@@ -424,7 +432,7 @@ class Team {
       const roundId=randomUUID();
       const report=options.reportId&&(room.reports||[]).find(r=>r.id===options.reportId);if(report){report.roundId=roundId;report.planReply=plan.reply;}
       const preview=room.log.find(line=>line.planningId===planningId);
-      const finalLine={text:plan.reply,progress:false,planning:false,coordinator:true,usageId:plan.usageId,roundId,assignedBotIds:plan.assignments.map(item=>item.botId)};
+      const finalLine={text:plan.reply,progress:false,planning:false,coordinator:true,usageId:plan.usageId,roundId,durationMs:Date.now()-startedAt,assignedBotIds:plan.assignments.map(item=>item.botId)};
       if(preview)Object.assign(preview,finalLine);else this.log(room,admin?.name||'System',plan.reply,finalLine);
       // Sibling workers have independent admission chains, with no batch barrier.
       for(const assignment of plan.assignments)this.enqueue(room,this.bot(assignment.botId),assignment.task,roundId,{...options,clientMessageId:undefined,sourceUserContent:content});
@@ -544,7 +552,7 @@ class Team {
   }
   summarize(room,roundId){return this.track(this.runSummary(room,roundId).finally(()=>deliverRoundReports(this,room,roundId)));}
   publishResult(room,job){
-    const extra={jobId:job.id,botId:job.botId,status:job.status,progress:false,thinking:job.thinking,toolEvents:job.toolEvents};
+    const extra={jobId:job.id,botId:job.botId,status:job.status,progress:false,thinking:job.thinking,toolEvents:job.toolEvents,durationMs:job.durationMs};
     const line=room.log.find(l=>l.jobId===job.id);
     if(line)Object.assign(line,{who:this.botName(job.botId),text:job.result||job.error||job.status,...extra});
     else this.log(room,this.botName(job.botId),job.result||job.error||job.status,extra);
@@ -571,8 +579,9 @@ class Team {
       const admin=this.state.bots.find(b=>b.id===room.adminId);if(!admin)return;
       const response=await this.complete(admin,ADMIN_RULES+'\nFor this summary return plain text only. Summarize verified outcomes; do not dispatch new work.',[{role:'user',content:JSON.stringify(jobs.map(j=>({member:this.botName(j.botId),status:j.status,result:j.result,error:j.error,toolCalls:j.toolCalls})))}],{roomId:room.id,kind:'summary'});
       const existing=room.log.find(l=>l.summary&&l.roundId===roundId);
-      if(existing)Object.assign(existing,{text:replyText(response.text),usageId:response.usageId});
-      else this.log(room,admin.name,replyText(response.text),{coordinator:true,summary:true,roundId,usageId:response.usageId});
+      const durationMs=this.state.completions.find(c=>c.id===response.usageId)?.durationMs;
+      if(existing)Object.assign(existing,{text:replyText(response.text),usageId:response.usageId,durationMs});
+      else this.log(room,admin.name,replyText(response.text),{coordinator:true,summary:true,roundId,usageId:response.usageId,durationMs});
       room.summarized.push(roundId);room.unread=true;
       try{await this.save();}catch(error){room.summarized=room.summarized.filter(id=>id!==roundId);throw error;}
     })();this.summaryChains.set(key,run);
@@ -607,6 +616,7 @@ class Team {
     for(const job of this.state.jobs.filter(j=>j.replyTo&&!j.replyDelivered&&['completed','error','not_started','aborted'].includes(j.status)))try{await this.deliverResult(job);}catch(error){job.deliveryError=String(error.message).slice(0,1000);}
     for(const room of this.state.rooms)try{await deliverRoundReports(this,room);}catch{}
     for(const question of this.state.questions.filter(q=>q.deliveryPending))try{await deliverQuestion(this,question);}catch(error){question.deliveryError=String(error.message).slice(0,1000);}
+    for(const view of (this.state.views||[]).filter(view=>view.deliveryPending))try{await deliverView(this,view);}catch(error){view.deliveryError=String(error.message).slice(0,1000);}
     await deliverKickoffs(this);
     }finally{this.polling=false;}
   }
@@ -643,9 +653,9 @@ class Team {
     const admission=(async()=>{
       if(kind==='room')return this.sendGroup(targetId,content,options);
       if(target.role!=='Administrator'||target.agentMode==='agent'){await this.runPrivateChat(targetId,content,options);return {accepted:true,clientMessageId:id};}
-      target.chat??=[];const input={id:randomUUID(),clientMessageId:id,who:'User',text:content,attachments:options.attachments,at:new Date().toISOString()};target.chat.push(input);
-      this.userSpoke();
-      try{await this.save();}catch(error){target.chat=target.chat.filter(l=>l!==input);throw error;}
+      target.chat??=[];const input={id:randomUUID(),clientMessageId:id,who:'User',text:options.sourceUserContent||content,attachments:options.attachments,at:new Date().toISOString()};target.chat.push(input);
+      this.userSpoke();const viewEdit=supersedeViews(this,targetId,options);
+      try{await this.save();}catch(error){viewEdit.rollback();target.chat=target.chat.filter(l=>l!==input);throw error;}
       // Admission finishes after persistence. Model planning remains serialized
       // in the background, without holding the renderer's send acknowledgement.
       const chain=(this.privateAdminChains.get(targetId)||Promise.resolve()).catch(()=>{}).then(()=>this.runPrivateChat(targetId,content,{...options,acceptedInput:true})).catch(async error=>{target.chat.push({id:randomUUID(),who:'System',text:'管理员处理失败：'+error.message,at:new Date().toISOString(),status:'error'});await this.save();});
@@ -665,7 +675,7 @@ class Team {
     if(!options.fromBotId)delete bot.kickoff;
     if(!options.fromBotId&&!options.acceptedInput)this.userSpoke();
     if(bot.role==='Administrator'&&bot.agentMode!=='agent'){
-      bot.chat??=[];if(!options.acceptedInput){bot.chat.push({id:randomUUID(),who:options.fromName||'User',text:content,attachments:options.attachments,at:new Date().toISOString()});await this.save();}
+      bot.chat??=[];if(!options.acceptedInput){bot.chat.push({id:randomUUID(),who:options.fromName||'User',text:content,attachments:options.attachments,at:new Date().toISOString()});const viewEdit=supersedeViews(this,botId,options);try{await this.save();}catch(error){viewEdit.rollback();throw error;}}
       bot.planning=true;
       try{await this.save();
       const workers=this.state.bots.filter(b=>b.role!=='Administrator');
@@ -673,12 +683,12 @@ class Team {
       const recent=(inputIndex>=0?bot.chat.filter((l,i)=>i<=inputIndex||l.who!=='User'):bot.chat).slice(-20);
       const reply=await this.complete(bot,ADMIN_RULES+this.context(bot,bot.sessions?.private),[{role:'user',content:JSON.stringify({request:content,workers:workers.map(b=>({id:b.id,name:b.name,instructions:b.instructions})),recent,references:options.referencesText||'',groups:this.state.rooms.map(r=>({id:r.id,name:r.name,members:r.members,adminId:r.adminId}))})}],{kind:'private'});
       const plan=parsePlan(reply.text,workers);await this.applyAdminActions(bot,plan.actions,undefined,options);
-      bot.chat.push({id:randomUUID(),who:bot.name,text:plan.reply,at:new Date().toISOString(),coordinator:true,usageId:reply.usageId,assignedBotIds:plan.assignments.map(item=>item.botId)});
+      bot.chat.push({id:randomUUID(),who:bot.name,text:plan.reply,at:new Date().toISOString(),coordinator:true,usageId:reply.usageId,durationMs:this.state.completions.find(c=>c.id===reply.usageId)?.durationMs,assignedBotIds:plan.assignments.map(item=>item.botId)});
       for(const assignment of plan.assignments)this.enqueue(null,this.bot(assignment.botId),assignment.task,undefined,{...options,clientMessageId:undefined,sourceUserContent:content});
       await this.save();this.memory?.status('bot:'+bot.id,'idle');return {text:plan.reply};
       }finally{bot.planning=false;await this.save();}
     }
-    const job=this.enqueue(null,bot,content,undefined,options);await this.save();return {jobId:job.id};
+    const job=this.enqueue(null,bot,content,undefined,options),viewEdit=supersedeViews(this,botId,options);try{await this.save();}catch(error){viewEdit.rollback();throw error;}return {jobId:job.id};
   }
   async cancel(jobId){
     const job=this.state.jobs.find(j=>j.id===jobId);if(!job||!this.active(job))throw new Error('No active task to interrupt.');

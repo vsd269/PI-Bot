@@ -24,6 +24,7 @@ async function createGroupFrom(team,creator,input){
 function archiveChat(team,kind,item){
   const {linesOf}=require('./history');
   const archive={kind,id:item.id,name:item.name,deletedAt:new Date().toISOString(),item:structuredClone(item),lines:structuredClone(linesOf(team,kind,item.id)),questions:structuredClone((team.state.questions||[]).filter(q=>kind==='room'?q.roomId===item.id:!q.roomId&&q.botId===item.id))};
+  if(kind==='bot')archive.views=structuredClone((team.state.views||[]).filter(view=>view.botId===item.id));
   (team.state.archives??=[]).push(archive);return archive;
 }
 module.exports={createBotFrom,createGroupFrom,archiveChat,deliverKickoffs};

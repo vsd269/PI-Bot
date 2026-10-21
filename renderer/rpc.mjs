@@ -11,7 +11,7 @@ export function createClient(dispatch){
   }
   const invoke=(method,args,priority)=>new Promise((resolve,reject)=>{queues[priority].push({method,args,resolve,reject});void drain();});
   return async(channel,payload)=>{
-    const priority=(['team.private.send','team.group.send','team.theme','team.prefs','team.capability.attach','team.bot.save','team.bot.delete','team.room.save','team.room.delete'].includes(channel)||channel==='team.microphone'&&['begin','finish','cancel'].includes(payload?.action))?0:channel==='team.state'?2:1;
+    const priority=(['team.private.send','team.group.send','team.view.answer','team.theme','team.prefs','team.capability.attach','team.bot.save','team.bot.delete','team.room.save','team.room.delete'].includes(channel)||channel==='team.microphone'&&['begin','finish','cancel'].includes(payload?.action))?0:channel==='team.state'?2:1;
     const {id}=await invoke('request.start',{channel,payload},priority);let offset=0,json='';
     for(;;){
       const result=await invoke('request.read',{id,offset},priority);

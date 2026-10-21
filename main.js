@@ -57,7 +57,7 @@ async function onPanelInvoke(channel,input={}){
     case 'team.room.patch': return team.patchSettings('room',input);
     case 'team.bot.save': return team.upsertBot(input);
     case 'team.bot.appearance': return team.setAppearance(input);
-    case 'team.memory.view': return team.memory.view(input.botId,{summarize:input.summarize===true,regenerate:input.regenerate===true});
+    case 'team.memory.view': return team.memory.endpoint('memory-view',{botId:input.botId,roomId:input.roomId,summarize:input.summarize===true,regenerate:input.regenerate===true});
     case 'team.memory.add': return team.memory.add(input);
     case 'team.memory.forget': return team.memory.endpoint('memory-forget',input);
     case 'team.memory.ask': return team.memory.endpoint('memory-ask',input);
@@ -71,6 +71,7 @@ async function onPanelInvoke(channel,input={}){
     case 'team.prefs': return team.preferences(input);
     case 'team.bot.main': return team.setMain(input);
     case 'team.question.answer': return team.answerQuestion(input);
+    case 'team.view.answer': return require('./src/views').answerView(team,input);
     case 'team.usage': {
       const view=team.usage(input);let catalog=[];
       try{catalog=await team.models();}catch{} // History remains usable offline.
@@ -114,7 +115,7 @@ function onRendererCall(method,args={}){
   if(method==='mode.request'){const open=openRequested;openRequested=false;return {open};}
   if(method==='request.start'){
     if(args.channel==='team.bootstrap')return beginRequest(args);
-    if(!['team.updates','team.startup','team.microphone','team.file.open','team.attachment.upload','team.plugins','team.github','team.bot.main','team.skill.import','team.extensions','team.browser','team.speech','team.mcp.login','team.secret.transfer','team.attachment.preview','team.mcp.save','team.mcp.delete','team.mcp.tools','team.secrets','team.secret.set','team.secret.get','team.secret.delete','team.secret.export','team.secret.import','team.recovery','team.bot.preview','team.bot.permission','team.theme','team.backup','team.bot.patch','team.room.patch','team.bot.appearance','team.bootstrap','team.state','team.models','team.workspaces','team.appearance','team.bot.save','team.memory.view','team.memory.add','team.memory.forget','team.memory.ask','team.room.save','team.group.send','team.private.send','team.job.cancel','team.session.open','team.bot.delete','team.bot.duplicate','team.room.delete','team.history.search','team.transcript','team.pin','team.react','team.prefs','team.question.answer','team.usage','team.connectors','team.schedules','team.schedule.save','team.schedule.toggle','team.schedule.delete','team.capabilities','team.capability.save','team.capability.delete','team.capability.attach'].includes(args.channel))throw new Error('Unknown PI-bot operation.');
+    if(!['team.updates','team.startup','team.microphone','team.file.open','team.attachment.upload','team.plugins','team.github','team.bot.main','team.skill.import','team.extensions','team.browser','team.speech','team.mcp.login','team.secret.transfer','team.attachment.preview','team.mcp.save','team.mcp.delete','team.mcp.tools','team.secrets','team.secret.set','team.secret.get','team.secret.delete','team.secret.export','team.secret.import','team.recovery','team.bot.preview','team.bot.permission','team.theme','team.backup','team.bot.patch','team.room.patch','team.bot.appearance','team.bootstrap','team.state','team.models','team.workspaces','team.appearance','team.bot.save','team.memory.view','team.memory.add','team.memory.forget','team.memory.ask','team.room.save','team.group.send','team.private.send','team.job.cancel','team.session.open','team.bot.delete','team.bot.duplicate','team.room.delete','team.history.search','team.transcript','team.pin','team.react','team.prefs','team.question.answer','team.view.answer','team.usage','team.connectors','team.schedules','team.schedule.save','team.schedule.toggle','team.schedule.delete','team.capabilities','team.capability.save','team.capability.delete','team.capability.attach'].includes(args.channel))throw new Error('Unknown PI-bot operation.');
     return beginRequest(args);
   }
   if(method==='request.read'){

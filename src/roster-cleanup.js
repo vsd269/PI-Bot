@@ -7,6 +7,7 @@ function cleanupRoster(state,edit=new StateEdit()){
   const ids=new Set(state.bots.map(bot=>bot.id));
   for(const connector of state.botConnectors||[])edit.remove(connector,'botIds',id=>!ids.has(id));
   edit.remove(state,'secretRequests',request=>!ids.has(request.botId));
+  edit.remove(state,'views',view=>!ids.has(view.botId)||Boolean(view.roomId));
   const config=state.integrations;
   if(config&&typeof config==='object'){
     if(config.speech&&typeof config.speech==='object')for(const id of Object.keys(config.speech))if(!ids.has(id))edit.delete(config.speech,id);
