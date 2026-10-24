@@ -106,7 +106,7 @@ class Team {
     // instruction. Remove that exact legacy value from workers so planning
     // cannot mistake an execution member for the coordinator.
     for(const bot of this.state.bots)if(bot.role!=='Administrator'&&bot.instructions==='Coordinate the team.')bot.instructions='';
-    this.state.completions??=[];this.state.questions??=[];this.state.views??=[];this.state.prefs??={theme:'deepseek',motion:'normal'};
+    this.state.completions??=[];this.state.questions??=[];this.state.views??=[];this.state.asides??=[];for(const card of this.state.asides)if(card.status==='answering'){card.status='error';card.error='重启中断了侧问，请重新提问。';}this.state.prefs??={theme:'deepseek',motion:'normal'};
     this.state.unattended??={sent:0};this.state.archives??=[];
     if(!Number.isInteger(this.state.unattended.sent)||this.state.unattended.sent<0)this.state.unattended.sent=0;
     for(const room of this.state.rooms){room.executionMode??='parallel';room.replyMode??='admin';for(const report of room.reports||[])if(!report.roundId&&!report.replyDelivered&&!report.error)report.error='重启中断了群聊派发，请检查聊天记录后再发起。';}
@@ -261,7 +261,7 @@ class Team {
   }
   patchSettings(kind,input){
     const execute=this.settingWrites.catch(()=>{}).then(()=>{
-      const allowed=kind==='bot'?['name','roleLabel','role','instructions','modelKey','thinkingLevel','workDir','agentMode']:['name','notice','workDir','members','adminId','executionMode','replyMode','permissionMode'];
+      const allowed=kind==='bot'?['name','roleLabel','role','instructions','modelKey','thinkingLevel','workDir','agentMode']:['name','notice','workDir','members','adminId','executionMode','replyMode','permissionMode','relayLimit'];
       const patch=Object.fromEntries(Object.entries(input.patch||{}).filter(([key])=>allowed.includes(key)));
       const current=kind==='bot'?this.bot(input.id):this.room(input.id);
       if(kind==='room'&&Object.hasOwn(patch,'name'))patch.named=Boolean(String(patch.name||'').trim());
@@ -291,6 +291,7 @@ class Team {
   upsertRoom(input,createdId){return this.rosterChange(()=>this.saveRoom(input,createdId));}
   updateRoomMembers(id,patch,add=[],remove=[]){return this.rosterChange(()=>{const room=this.room(id),members=[...new Set([...room.members,...add])].filter(id=>!remove.includes(id)&&this.state.bots.some(b=>b.id===id));return this.saveRoom({...room,...patch,members});});}
   async saveRoom(input,createdId){
+    if(input.relayLimit!=null&&(!Number.isInteger(input.relayLimit)||input.relayLimit<1||input.relayLimit>1000))throw Error('群聊自动交接上限需要为 1–1000。');
     if(input.permissionMode!=null&&!permissionModes.includes(input.permissionMode))throw Error('无效的 PI 权限模式。');
     if(!Array.isArray(input.members))throw new Error('请选择群聊成员。');
     const members=[...new Set(input.members??[])];members.forEach(id=>this.bot(id));if(members.length<(input.id?1:2))throw new Error(input.id?'群聊至少需要一位成员。':'群聊至少需要两位成员。');if(input.adminId!=null&&!members.includes(input.adminId))throw new Error('Administrator must belong to the group.');
@@ -305,6 +306,7 @@ class Team {
     for(const id of changedMembers){const bot=this.bot(id);if(bot.sessions?.[room.id]){bot.sessionArchive??=[];bot.sessionArchive.push({roomId:room.id,sessionId:bot.sessions[room.id]});delete bot.sessions[room.id];}}
     const named=Object.hasOwn(input,'named')&&input.name===room.name?input.named:Boolean(String(input.name||'').trim());
     Object.assign(room,{name:named?bounded(input.name,'Group name',200):members.map(id=>this.botName(id)).join('、').slice(0,200),named,members,adminId:input.adminId??null,notice:String(input.notice??'').slice(0,16000),executionMode:input.executionMode==='serial'?'serial':'parallel',replyMode:input.replyMode==='everyone'?'everyone':'admin'});
+    if(Object.hasOwn(input,'relayLimit'))room.relayLimit=input.relayLimit??null;
     if(Object.hasOwn(input,'permissionMode'))room.permissionMode=input.permissionMode??null;else if(!input.id)room.permissionMode='inherit';
     if(!input.id)this.state.rooms.push(room);
     try{await this.save();}catch(error){if(!input.id)this.state.rooms=this.state.rooms.filter(item=>item!==room);throw error;}
@@ -377,7 +379,7 @@ class Team {
   async runCompletion(bot,system,messages,scope={}){
     const model=await this.model(scope.modelKey?{modelKey:scope.modelKey}:bot),at=Date.now();
     const record={id:randomUUID(),botId:bot.id,modelKey:model.key,...scope,at:new Date(at).toISOString()};
-    try{const response=await this.pi.agent.complete({modelKey:model.key,system,messages,thinkingLevel:scope.kind==='memory'?'off':bot.thinkingLevel||'off'});
+    try{const response=await this.pi.agent.complete({modelKey:model.key,system,messages,thinkingLevel:['memory','btw'].includes(scope.kind)?'off':bot.thinkingLevel||'off'});
       record.usage=collectUsage([{id:record.id,role:'assistant',usage:response.usage}]);record.durationMs=Date.now()-at;
       (this.state.completions??=[]).push(record);await this.save();return {...response,usageId:record.id};
     }catch(error){record.durationMs=Date.now()-at;record.failed=true;(this.state.completions??=[]).push(record);await this.save();throw error;}
@@ -385,7 +387,7 @@ class Team {
   async sendGroup(roomId,content,options={}){
     bounded(content,'Message');const room=this.room(roomId),release=this.reserveRoom(roomId);this.log(room,'User',content,{...(options.clientMessageId?{clientMessageId:options.clientMessageId}:{}),attachments:options.attachments});const input=room.log.at(-1);
     try{this.userSpoke();room.botRounds=0;await this.save();}catch(error){room.log=room.log.filter(l=>l!==input);release();throw error;}
-    const chain=(this.roomChains.get(roomId)||Promise.resolve()).catch(()=>{}).then(()=>this.coordinate(room,content,options)).finally(release);this.roomChains.set(roomId,chain);
+    const chain=(this.roomChains.get(roomId)||Promise.resolve()).catch(()=>{}).then(async()=>{if(room.pausedRelays?.length)await require('./group-relay').resume(this,room);else room.relayCount=0;return this.coordinate(room,content,options);}).finally(release);this.roomChains.set(roomId,chain);
     this.track(chain.catch(async e=>{this.log(room,'System',e.message);await this.save();})).catch(()=>{});return options.clientMessageId?{accepted:true,clientMessageId:options.clientMessageId}:this.snapshot();
   }
   async nativePlan(room,admin,prompt,planningId,startedAt){
@@ -447,12 +449,12 @@ class Team {
       await this.save();throw error;
     }finally{room.planning=false;await this.save();}
   }
-  enqueue(room,bot,task,roundId=randomUUID(),options={}){
+  enqueue(room,bot,task,roundId=randomUUID(),options={},admission=Promise.resolve()){
     if(bot.id===room?.adminId||(bot.role==='Administrator'&&(room||bot.agentMode!=='agent')))throw new Error('Administrator cannot execute tasks in planner mode or as a group worker.');
     const job={id:randomUUID(),roundId,roomId:room?.id,botId:bot.id,task,status:'queued',at:new Date().toISOString(),attempt:0,...options};this.state.jobs.push(job);
     const dependencies=[this.memberChains.get(bot.id)||Promise.resolve()];
     if(room?.executionMode==='serial'&&!options.offRound)dependencies.push(this.roomExecutionChains.get(room.id)||Promise.resolve());
-    const chain=Promise.all(dependencies.map(value=>value.catch(()=>{}))).then(()=>this.execute(job,room,bot)).catch(error=>this.failJob(job,error));
+    const chain=Promise.all(dependencies.map(value=>value.catch(()=>{}))).then(()=>admission).then(()=>this.execute(job,room,bot)).catch(error=>this.state.jobs.includes(job)?this.failJob(job,error):undefined);
     this.memberChains.set(bot.id,chain);if(room?.executionMode==='serial'&&!options.offRound)this.roomExecutionChains.set(room.id,chain);return job;
   }
   async session(room,bot,attempt=0){
@@ -565,14 +567,8 @@ class Team {
     if(job.delegated||job.isHandoffReply||this.stopped)return;
     const candidates=room.members.map(id=>this.bot(id)).filter(b=>b.id!==job.botId&&b.role!=='Administrator');
     const ids=[...new Set(this.mentions.mentionSpans(job.result||'',candidates).filter(s=>s.bot).map(s=>s.bot.id))];
-    job.delegated=true;
     const path=[...new Set([...(job.mentionPath||[]),job.botId])];
-    for(const id of ids){
-      if(path.includes(id)||(job.hop||0)>=MAX_UNATTENDED_MESSAGES){this.log(room,'System','已停止重复的自动交接，请检查结果后再发消息。');continue;}
-      try{await this.admitBotMessage();}catch(error){if(this.state.unattended?.sent>=MAX_UNATTENDED_MESSAGES){this.log(room,'System',error.message);break;}throw error;}
-      this.enqueue(room,this.bot(id),'群聊成员 '+this.botName(job.botId)+' 向你交接任务：\n'+job.result,undefined,{attachments:job.attachments,referencesText:job.referencesText,offRound:true,fromBotId:job.botId,fromName:this.botName(job.botId),replyTo:job.botId,replyRoomId:room.id,hop:(job.hop||0)+1,mentionPath:path});
-    }
-    await this.save();
+    return require('./group-relay').delegate(this,room,job,ids,path);
   }
   async runSummary(room,roundId){
     const key=room.id+':'+roundId;if(this.summaryChains.has(key))return this.summaryChains.get(key);
@@ -646,6 +642,7 @@ class Team {
     }
   }
   submitMessage(kind,targetId,content,options={}){
+    if(/^\/btw(?:\s|$)/i.test(content)){if(kind!=='bot')throw Error('/btw 侧问仅用于 Bot 私聊。');if(options.attachments?.length||options.references?.length)throw Error('侧问暂不支持附件或引用，请使用普通消息发送。');return require('./asides').ask(this,{botId:targetId,question:content.replace(/^\/btw\s*/i,''),clientMessageId:options.clientMessageId});}
     if(!options.clientMessageId)return kind==='room'?this.sendGroup(targetId,content,options):this.privateChat(targetId,content,options);
     bounded(content,'Message');if(this.stopped)throw new Error('PI-bot is stopping.');
     const target=kind==='room'?this.room(targetId):this.bot(targetId),id=options.clientMessageId;
@@ -765,10 +762,13 @@ class Team {
     if(input.theme!==undefined&&!['deepseek','mono','paper','moonlight'].includes(input.theme))throw new Error('Unknown theme');
     if(input.accent!==undefined&&input.accent!==null&&!/^#[a-f0-9]{6}$/i.test(input.accent))throw new Error('Invalid accent');
     if(input.motion!==undefined&&!['quiet','normal','lively'].includes(input.motion))throw new Error('Invalid motion');
+    if(input.messageLayout!==undefined&&!['bubble','flat'].includes(input.messageLayout))throw Error('Invalid message layout');
+    for(const key of ['bubbleWidth','textWidth'])if(input[key]!==undefined&&(!Number.isInteger(input[key])||input[key]<50||input[key]>100||input[key]%5))throw Error('消息宽度需要为 50–100，步进 5。');
+    if(input.showThinking!==undefined&&typeof input.showThinking!=='boolean')throw Error('Invalid thinking visibility');
     // Let earlier writes take their snapshots before exposing tentative prefs.
     let pending;do{pending=this.writes;await pending;}while(pending!==this.writes);
     const prefs=this.state.prefs??={},edit=new StateEdit();
-    for(const key of ['theme','accent','motion','memoryReview','appearanceMode','appearance'])if(input[key]!==undefined)edit.set(prefs,key,key==='memoryReview'?input[key]===true:input[key]);
+    for(const key of ['theme','accent','motion','memoryReview','appearanceMode','appearance','messageLayout','bubbleWidth','textWidth','showThinking'])if(input[key]!==undefined)edit.set(prefs,key,key==='memoryReview'?input[key]===true:input[key]);
     await this.commitEdit(edit);
     return input.compact?{prefs:structuredClone(prefs)}:this.snapshot();
   }

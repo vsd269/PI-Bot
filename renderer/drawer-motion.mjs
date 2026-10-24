@@ -4,6 +4,7 @@ export function createDrawerMotion({panel,conversation,trigger,onClose}){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)');
   function set(next){
     if(disposed||next===opened)return;
+    if(next)panel.getRootNode().host?.dispatchEvent(new CustomEvent('pi-bot:details-open'));
     const ticket=++revision,wasHidden=panel.hidden;
     const from=wasHidden?'translateX(100%)':getComputedStyle(panel).transform;
     animation?.cancel();opened=next;

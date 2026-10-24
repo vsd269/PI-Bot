@@ -1,13 +1,14 @@
 import {morphWidth,menuVisible} from './interaction-motion.mjs';
 import {el} from './dom.mjs';
 import {avatarState} from './avatar-motion.mjs';
-const ACTIVE=['queued','launching','running','waiting'];
-const rank={waiting:0,running:1,launching:2,queued:3};
+const ACTIVE=['queued','launching','running','waiting','waiting_teammates'];
+const rank={waiting:0,running:1,launching:2,queued:3,waiting_teammates:4};
 const toolWords={read:'读取文件',Read:'读取文件',write:'写入文件',Write:'写入文件',edit:'修改文件',Edit:'修改文件',bash:'运行命令',Bash:'运行命令',shell:'运行命令',web_search:'搜索资料',message_bot:'联系成员',read_group_chat:'查看群聊',read_own_chat:'查看私聊'};
 const phaseWords={starting:'正在启动',preparing:'准备执行',compacting:'整理上下文',recovering:'恢复会话',retrying:'等待重试','waiting-subagents':'等待子任务完成'};
 export function activityLabel(job){
   if(!job)return '空闲';
   if(job.status==='waiting')return '等待你的批准';
+  if(job.status==='waiting_teammates')return '等待队友交回结果';
   if(job.status==='queued')return '排队等待';
   if(job.status==='launching')return '正在启动';
   if(phaseWords[job.activityPhase])return phaseWords[job.activityPhase];

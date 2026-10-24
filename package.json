@@ -1,6 +1,6 @@
 {
   "name": "pi-bot-desktop",
-  "version": "0.3.84",
+  "version": "0.3.85",
   "private": true,
   "description": "DeepSeek-Bot adaptation for PI Desktop: persistent bots, group collaboration, memory and skills.",
   "license": "Apache-2.0",
@@ -11,10 +11,11 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "check": "node scripts/check.cjs",
-    "test": "node --test tests/regression.cjs tests/capability-regression.cjs tests/preferences-regression.cjs tests/project-metadata.cjs tests/updates.cjs tests/vault-transfer.cjs tests/identity-migration.cjs tests/activation.cjs tests/upstream-020.cjs tests/attachments.cjs tests/attachment-limits.cjs",
+    "test": "node --test tests/regression.cjs tests/capability-regression.cjs tests/preferences-regression.cjs tests/project-metadata.cjs tests/updates.cjs tests/vault-transfer.cjs tests/identity-migration.cjs tests/activation.cjs tests/upstream-020.cjs tests/attachments.cjs tests/attachment-limits.cjs tests/upstream-021.cjs",
     "test:attachments-ui": "node tests/attachments-ui.cjs",
     "test:attachments-native": "node tests/attachments-native.cjs",
     "test:upstream-ui": "node tests/upstream-020-ui.cjs",
+    "test:upstream-021-ui": "node tests/upstream-021-ui.cjs",
     "test:sidebar": "node tests/sidebar-entry-ui.cjs",
     "package": "node scripts/package.cjs",
     "preflight:market": "node scripts/market-preflight.cjs",

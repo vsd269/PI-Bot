@@ -16,7 +16,7 @@ export function createOutbox({send,onChange}){
     retry(id){const entry=entries.get(id);if(entry?.delivery==='failed')void deliver(entry);},
     discard(id){if(entries.get(id)?.delivery!=='failed')return false;entries.delete(id);onChange();return true;},
     reconcile(state){
-      const accepted=new Set([...state.rooms.flatMap(r=>r.log||[]),...state.bots.flatMap(b=>b.chat||[]),...state.jobs].map(row=>row.clientMessageId).filter(Boolean));
+      const accepted=new Set([...state.rooms.flatMap(r=>r.log||[]),...state.bots.flatMap(b=>b.chat||[]),...state.jobs,...(state.asides||[])].map(row=>row.clientMessageId).filter(Boolean));
       for(const id of accepted)entries.delete(id);
     },
     lines(target){return [...entries.values()].filter(e=>e.target.kind===target?.kind&&e.target.id===target?.id).map(e=>({id:e.id,clientMessageId:e.id,who:'User',text:e.content,at:e.at,delivery:e.delivery,error:e.error}));}

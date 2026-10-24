@@ -15,6 +15,8 @@ export function applyPreferences(app,prefs={}){
   const values={'--bt-main':mode.bg,'--bt-sidebar':mode.sidebar,'--bt-bubble':mode.bubble,'--bt-card':mode.card,'--bt-ink':mode.text,'--bt-ink-2':alpha(mode.text,.6),'--bt-ink-3':alpha(mode.text,.36),'--bt-line':alpha(mode.text,.08),'--bt-line-2':alpha(mode.text,.15),'--bt-user':mode.user,'--bt-user-ink':mode.userText,'--bt-accent':accent};
   Object.assign(values,{'--bt-hover':dark?'rgba(160,160,160,.12)':'rgba(119,119,119,.09)','--bt-active':dark?'rgba(160,160,160,.2)':'rgba(119,119,119,.17)','--bt-accent-ink':luminance(isHex(values['--bt-accent'])?values['--bt-accent']:mode.accent)>.45?'#141414':'#ffffff','--bt-tag-bg':alpha(mode.text,dark ? .09 : .06),'--bt-tag-ink':alpha(mode.text,.58)});
   for(const [key,value] of Object.entries(values))if(app.style.getPropertyValue(key)!==value)app.style.setProperty(key,value);
+  app.dataset.messageLayout=prefs.messageLayout==='flat'?'flat':'bubble';
+  app.style.setProperty('--pi-bubble-width',(Number(prefs.bubbleWidth)||80)+'%');app.style.setProperty('--pi-text-width',(Number(prefs.textWidth)||100)+'%');
   if(app.dataset.btMotion!==(prefs.motion||'normal'))app.dataset.btMotion=prefs.motion||'normal';
 }
 const button=(text,run)=>{const b=el('button',text,'soft-button');b.type='button';b.onclick=()=>Promise.resolve().then(run).catch(error=>b.dispatchEvent(new CustomEvent('settings-error',{bubbles:true,detail:error})));return b;};

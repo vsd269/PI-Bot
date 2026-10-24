@@ -27,6 +27,8 @@ function validateState(state){
   }
   for(const key of ['schedules','questions','completions','archives'])if(state[key]!==undefined&&(!Array.isArray(state[key])||state[key].some(v=>!v||typeof v!=='object'||Array.isArray(v))))throw Error('备份中的任务或记录无效。');
   if(state.views!==undefined)validateRecords(state.views,state.bots);
+  require('./asides').validateAsides(state);
+  for(const room of state.rooms)require('./group-relay').validateRelays(room,state.bots);
   if(state.jobs.some(v=>!v||typeof v!=='object'||Array.isArray(v)))throw Error('备份中的任务记录无效。');
   const archiveIds=new Set();for(const entry of state.archives||[]){const key=entry.kind+':'+entry.id;if(!['bot','room'].includes(entry.kind)||!safeId(entry.id)||archiveIds.has(key)||typeof entry.name!=='string'||!Array.isArray(entry.lines)||entry.lines.some(l=>!l||typeof l!=='object'||Array.isArray(l)||typeof l.text!=='string'))throw Error('备份中的历史归档无效。');archiveIds.add(key);}
   if(state.prefs!==undefined&&(!state.prefs||typeof state.prefs!=='object'||Array.isArray(state.prefs)))throw Error('备份中的偏好设置无效。');
@@ -76,6 +78,7 @@ function pausedState(value){
   for(const job of state.jobs)if(['queued','launching','running','waiting','waiting_teammates'].includes(job.status)){job.status='interrupted';job.error='已从备份恢复；请检查原生会话后手动重新派发。';}
   for(const task of state.schedules||[]){task.enabled=false;task.status='needs_review';task.error='已恢复配置，请检查工作区、时间后手动启用。';}
   for(const question of state.questions||[]){question.deliveryPending=false;if(question.status==='pending')question.status='interrupted';}
+  for(const aside of state.asides||[])if(aside.status==='answering'){aside.status='cancelled';aside.error='恢复备份已中止侧问。';}
   for(const view of state.views||[]){view.deliveryPending=false;if(view.status==='pending')view.status='interrupted';}
   return state;
 }

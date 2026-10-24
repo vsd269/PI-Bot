@@ -1,7 +1,7 @@
 'use strict';
 const {createHash}=require('node:crypto');
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const collections=new Set(['bots','rooms','jobs']);
+const collections=new Set(['bots','rooms','jobs','asides']);
 
 // Cache fingerprints only. Every delta is against the requesting window's
 // exact cursor, so concurrent windows and lost replies cannot mix baselines.

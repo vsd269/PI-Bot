@@ -4,6 +4,12 @@ Persistent Bot teams for **PI Desktop**. [简体中文](README.md)
 
 PI Bot is an independently maintained adaptation of [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DeepSeek-Bot distribution, and it does not claim complete feature parity.
 
+## New in 0.3.85
+
+Adapted from DeepSeek-Bot 0.2.1: independent `/btw` side questions, charts and formula calculators, persisted group mention pause/continue, bubble/flat layouts and width controls, optional thinking display, secret purpose editing, unreadable-memory protection, and narrow/touch improvements. See [release notes](docs/RELEASE-0.3.85.md) for entry points and limits.
+
+Side questions use the Bot's configured model and incur normal usage. Cancellation ignores late answers; PI does not expose cancellation of the underlying one-shot request. HTML cards are static opaque-origin sandboxes with scripts and network disabled. Upstream standalone-client packaging, account management and browser-profile cookie import are not included.
+
 ## Features
 
 - Persistent private chats and Bot groups, administrator delegation, serial or parallel group execution.

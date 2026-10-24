@@ -5,6 +5,7 @@ const {checkShownView,normalizeView,validateViewAnswer,viewSummary,viewBytes,VIE
 const STATES=new Set(['displayed','pending','answered','dismissed','superseded','interrupted']);
 const secretField=/(?:api[\s_-]*key|password|passwd|secret|token|密钥|密码|口令|令牌)/i;
 function checkSecrets(node){
+  if(['slider','number','choice','toggle'].includes(node.type)&&secretField.test([node.id,node.label].join(' ')))throw Error('凭据请使用 request_secret，不要通过卡片收集。');
   if(node.type==='form'&&node.fields.some(field=>secretField.test([field.id,field.label,field.placeholder].join(' '))))throw Error('密钥、令牌和密码请使用 request_secret，不要通过交互卡片收集。');
   for(const child of node.children||[])checkSecrets(child);
 }

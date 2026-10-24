@@ -11,10 +11,10 @@ function cleanRecord(vault,value){
 function cleanState(vault,state){
   const copy=structuredClone(state);
   const bot=value=>{if(value.chat)value.chat=cleanRecord(vault,value.chat);for(const key of ['memory','legacyMemory'])if(typeof value[key]==='string')value[key]=vault.redact(value[key]);if(value.kickoff)value.kickoff=cleanRecord(vault,value.kickoff);};
-  const room=value=>{if(value.log)value.log=cleanRecord(vault,value.log);if(value.reports)value.reports=cleanRecord(vault,value.reports);};
+  const room=value=>{if(value.log)value.log=cleanRecord(vault,value.log);if(value.reports)value.reports=cleanRecord(vault,value.reports);if(value.pausedRelays)value.pausedRelays=cleanRecord(vault,value.pausedRelays);};
   for(const value of copy.bots||[])bot(value);
   for(const value of copy.rooms||[])room(value);
-  for(const key of ['jobs','questions','secretRequests','completions','permissionRequests','diagnostics'])if(copy[key])copy[key]=cleanRecord(vault,copy[key]);
+  for(const key of ['jobs','questions','asides','secretRequests','completions','permissionRequests','diagnostics'])if(copy[key])copy[key]=cleanRecord(vault,copy[key]);
   if(copy.memoryNews)copy.memoryNews=vault.clean(copy.memoryNews);
   for(const task of copy.schedules||[]){if(task.error)task.error=vault.redact(task.error);if(task.runs)task.runs=cleanRecord(vault,task.runs);}
   for(const entry of copy.archives||[]){entry.lines=cleanRecord(vault,entry.lines);entry.questions=cleanRecord(vault,entry.questions);if(entry.item)(entry.kind==='bot'?bot:room)(entry.item);}

@@ -39,8 +39,13 @@ async function createMemoryAdapter(team,{review=true,reviewDelayMs=2000}={}){
   sync();upstream.install(rt);await Promise.all(registrations);
   const view=async(botId,options={})=>{sync();const value=await rt.memoryEndpoint('memory-view',{botId,...options});const bot=rt.botOf(botId);if(bot)bot.memory=value.entries.filter(e=>e.scope==='own').map(e=>'- '+e.text).join('\n');return value;};
   for(const bot of team.state.bots){
+    try {
     if(bot.memory&&!bot.memoryMigrated){bot.legacyMemory=bot.memory;const current=await view(bot.id);if(!current.entries.some(e=>e.scope==='own'))for(const line of bot.legacyMemory.split('\n').map(s=>s.replace(/^\s*-\s*/, '').trim()).filter(Boolean)){const result=await tools.get('remember').execute({text:line,scope:'own'},{agent:{id:chatOf(bot.id)}});if(!/^Saved to|^Already in/.test(result))rt.warn('Legacy memory migration: %s',result);}}
-    bot.memoryMigrated=true;await view(bot.id);
+    await view(bot.id);bot.memoryMigrated=true;
+    } catch (error) {
+      if(error.code!=='memory/unreadable')throw error;
+      rt.warn('PI Bot memory is unavailable; original files retained: %s',error.message);
+    }
   }
   const status=(id,value)=>{sync();if(team.state.prefs?.memoryReview===false)return;try{hooks.get('agent/status')?.({agent:{id},status:value});}catch{}};
   const target=input=>{if(input.roomId!==undefined){const room=roomOf(input.roomId);if(!room)throw new Error('Unknown group chat');return {roomId:room.id};}if(!rt.botOf(input.botId))throw new Error('Unknown Bot');return {botId:input.botId};};

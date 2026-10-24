@@ -53,6 +53,7 @@ export function attachWorkspaceSidebar(root,{prepare=async()=>{},onError=()=>{},
         if(!ready)throw Error('工作区尚未就绪，请先选择已有聊天记录的机器人或群聊后重试。');
         control=native();
       }
+      root.dispatchEvent(new CustomEvent('pi-bot:workspace-open'));
       requested=true;
       if(control.getAttribute('aria-pressed')!=='true')control.click();
       schedule();
@@ -65,10 +66,11 @@ export function attachWorkspaceSidebar(root,{prepare=async()=>{},onError=()=>{},
     }catch(error){if(!stopped&&active&&generation===token){requested=false;schedule();onError(error.message);}}
     finally{button.disabled=false;button.removeAttribute('aria-busy');}
   };
+  const closeForDetails=()=>{if(requested){requested=false;generation++;const control=native();if(control?.getAttribute('aria-pressed')==='true')control.click();schedule();}};root.addEventListener('pi-bot:details-open',closeForDetails);
   const observer=new MutationObserver(schedule);observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','aria-pressed','disabled','hidden','inert']});
   window.addEventListener('resize',schedule);update();
   return {
     setActive(value){active=value;if(!value){requested=false;generation++;}schedule();},
-    close(){stopped=true;generation++;cancelAnimationFrame(frame);observer.disconnect();resize.disconnect();window.removeEventListener('resize',schedule);root.style.width='100%';button.remove();}
+    close(){root.removeEventListener('pi-bot:details-open',closeForDetails);stopped=true;generation++;cancelAnimationFrame(frame);observer.disconnect();resize.disconnect();window.removeEventListener('resize',schedule);root.style.width='100%';button.remove();}
   };
 }

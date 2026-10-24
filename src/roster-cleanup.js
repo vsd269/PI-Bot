@@ -7,6 +7,7 @@ function cleanupRoster(state,edit=new StateEdit()){
   const ids=new Set(state.bots.map(bot=>bot.id));
   for(const connector of state.botConnectors||[])edit.remove(connector,'botIds',id=>!ids.has(id));
   edit.remove(state,'secretRequests',request=>!ids.has(request.botId));
+  edit.remove(state,'asides',aside=>!ids.has(aside.botId));
   edit.remove(state,'views',view=>!ids.has(view.botId)||Boolean(view.roomId));
   const config=state.integrations;
   if(config&&typeof config==='object'){
@@ -21,6 +22,7 @@ function cleanupRoster(state,edit=new StateEdit()){
   if(state.github?.ownerId&&!ids.has(state.github.ownerId))edit.delete(state,'github');
   for(const room of [...state.rooms]){
     if(!Array.isArray(room.members))continue;
+    edit.remove(room,'pausedRelays',relay=>!ids.has(relay.botId)||!room.members.includes(relay.botId)||!ids.has(relay.options?.fromBotId));
     edit.remove(room,'members',id=>!ids.has(id));
     if(!room.members.length&&room.adminId==null){
       // Keep all history when removing a room whose final member was deleted.

@@ -101,5 +101,23 @@
       "member-status.js": "9280d42fcfd496f453aefea7a04cd0477411d7a4c252d7339cc3e6f7fb7f4a7b",
       "connectors.js": "e615e4562078aba993fd5f89aa1545c09d4927e8ad82db551ca10ac188c8bae8"
     }
+  },
+  "migration0385": {
+    "date": "2026-10-24",
+    "version": "0.2.1",
+    "basePiBotVersion": "0.3.84",
+    "license": "Apache-2.0",
+    "repository": "https://github.com/Fei2411/DeepSeek-Bot",
+    "source": "User-provided DeepSeek-Bot 0.2.1 source archive; upstream commit not verified",
+    "referenceSha256": {
+      "ds-bot/src/host/memory.js": "d7a77136ac978bbc7ea4ea5bb8e487901fefc8267d56d34d9c0002fda691cc41",
+      "ds-bot/src/host/groups.js": "750d05867b9c1dcbbacf6a1e8b88f176ef7ea101303e9061454028f8a2310da5",
+      "ds-bot/src/host/btw.js": "76f478831905d91dbea9c39f0fbe44c94b9b67bbef04ed75718d5a4639b49636",
+      "ds-bot/src/shared/views.js": "83e6a0ec08938bf4ed9874466e831a2d84b7116848daa83671c5434f7ce64609",
+      "ds-bot/src/shared/formula.js": "2fda97b3a9f146eee4c80d7fb5abeb476c47d00153032c680a8c9d1b1903a749",
+      "ds-bot/src/client/themes.js": "039a9688519f4dcb67aea6bfeb86a64218fcc55a3a25b5cb322529abd97fdcfd",
+      "ds-bot/src/client/widget-html.js": "fba587444a6ecac6f1d6f27a6d8a2d37d346cd14cbfd8fe7301d115b05595f8b"
+    },
+    "adaptation": "Memory unreadable-file protection ported into the existing PI adapter. Pure view/formula protocols copied to ESM and mechanically converted to CommonJS. PI-native independent text-only side questions, persisted group mention pause/continue queues, layout preferences, secret purpose editing, chart/control/static HTML DOM renderers, narrow/touch support and right-panel coordination. Static HTML uses an opaque-origin sandbox without scripts or network. DSH/Electron platform-specific account, Linux packaging, cookie-profile import and new-terminal APIs are not copied. Historical provenance retained."
   }
 }
