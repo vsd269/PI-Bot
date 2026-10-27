@@ -7,6 +7,7 @@ const {cleanupRoster}=require('./roster-cleanup');
 const {endpoint}=require('./net');
 const {validateBundle}=require('./skill-import');
 const {validateRecords}=require('./views');
+const {validateLibrary}=require('./avatar-library');
 const {ID,LEGACY_ID,backupRoot}=require('./identity');
 const MAX_BYTES=32*1024*1024;
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -51,6 +52,7 @@ function validateState(state){
     }
   }
   if(state.secretRequests!==undefined&&(!Array.isArray(state.secretRequests)||state.secretRequests.length>10000||state.secretRequests.some(r=>!r||!safeId(r.id)||!ids.has(r.botId)||typeof r.name!=='string'||! /^[A-Z_][A-Z0-9_]{0,79}$/.test(r.name)||!['pending','provided','interrupted'].includes(r.status)||typeof r.reason!=='string'||r.reason.length>1000)))throw Error('备份中的密钥请求无效。');
+  if(state.messageBotRequests!==undefined&&(!Array.isArray(state.messageBotRequests)||state.messageBotRequests.length>10000||state.messageBotRequests.some(r=>!r||!safeId(r.sourceBotId)||!safeId(r.targetBotId)||typeof r.requestId!=='string'||! /^[A-Za-z0-9._:-]{1,120}$/.test(r.requestId)||r.key!==r.sourceBotId+':'+r.requestId||! /^[a-f0-9]{64}$/.test(r.signature)||!['admitting','accepted','failed','interrupted'].includes(r.status)||!Number.isFinite(Date.parse(r.at))||r.jobId!==undefined&&!safeId(r.jobId))))throw Error('备份中的机器人消息请求记录无效。');
   if(state.integrations!==undefined)validateIntegrations(state.integrations,state.bots);
   return state;
 }
@@ -59,6 +61,7 @@ function parseArchive(text){
   let value;try{value=JSON.parse(text);}catch{throw Error('无法读取备份 JSON。');}
   if(value?.format!=='pi-bot-backup'||value.schema!==1||![ID,LEGACY_ID].includes(value.pluginId)||!value.payload||value.sha256!==hash(value.payload))throw Error('备份格式或校验值不正确。');
   validateState(value.payload.team);
+  if(value.payload.avatarLibrary!==undefined)validateLibrary(value.payload.avatarLibrary);
   const files=value.payload.memory;
   if(!files||Array.isArray(files)||typeof files!=='object'||Object.keys(files).length>10000)throw Error('备份记忆文件无效。');
   for(const [name,content] of Object.entries(files))if(!memoryPath(name)||typeof content!=='string')throw Error('备份包含无效的记忆路径。');
@@ -80,6 +83,7 @@ function pausedState(value){
   for(const question of state.questions||[]){question.deliveryPending=false;if(question.status==='pending')question.status='interrupted';}
   for(const aside of state.asides||[])if(aside.status==='answering'){aside.status='cancelled';aside.error='恢复备份已中止侧问。';}
   for(const view of state.views||[]){view.deliveryPending=false;if(view.status==='pending')view.status='interrupted';}
+  for(const request of state.messageBotRequests||[])if(request.status==='admitting'){request.status='interrupted';request.error='备份恢复中断了请求；为避免重复派发，没有自动重试。';}
   return state;
 }
 async function atomic(file,text){await fs.mkdir(path.dirname(file),{recursive:true});const tmp=file+'.'+randomUUID()+'.tmp';try{await fs.writeFile(tmp,text,'utf8');await fs.rename(tmp,file);}finally{await fs.rm(tmp,{force:true}).catch(()=>{});}}
@@ -96,10 +100,10 @@ class Backups{
     const walk=async dir=>{let entries;try{entries=await fs.readdir(dir,{withFileTypes:true});}catch(e){if(e.code==='ENOENT')return;throw e;}
       for(const entry of entries){if(entry.isSymbolicLink())continue;const file=path.join(dir,entry.name);if(entry.isDirectory())await walk(file);else if(entry.isFile()){const rel=path.relative(this.team.data,file).split(path.sep).join('/');if(memoryPath(rel)){const info=await fs.stat(file);size+=info.size;if(size>MAX_BYTES)throw Error('记忆文件超过备份大小限制。');memory[rel]=await fs.readFile(file,'utf8');}}}};
     await walk(path.join(this.team.data,'memory'));
-    const payload={team:this.team.vault?this.team.vault.cleanState(state):structuredClone(state),memory:this.team.vault?this.team.vault.clean(memory):memory},archive={format:'pi-bot-backup',schema:1,pluginId:ID,pluginVersion:require('../manifest.json').version,createdAt:new Date().toISOString(),reason,sha256:hash(payload),payload};
+    const payload={team:this.team.vault?this.team.vault.cleanState(state):structuredClone(state),memory:this.team.vault?this.team.vault.clean(memory):memory,avatarLibrary:this.team.avatars?.export()||{version:1,revision:0,items:[]}},archive={format:'pi-bot-backup',schema:1,pluginId:ID,pluginVersion:require('../manifest.json').version,createdAt:new Date().toISOString(),reason,sha256:hash(payload),payload};
     const text=JSON.stringify(archive);if(Buffer.byteLength(text)>MAX_BYTES)throw Error('备份超过 32 MB，请另行复制完整数据目录。');return {archive,text};
   }
-  configKey(state){return hash({bots:state.bots.map(({chat,sessions,sessionArchive,sessionWorkspaces,memory,...config})=>config),rooms:state.rooms.map(({log,sessions,planning,...config})=>config),integrations:state.integrations,prefs:state.prefs,botConnectors:state.botConnectors,capabilities:state.capabilities,schedules:(state.schedules||[]).map(({runs,nextAt,status,error,...config})=>config)});}
+  configKey(state){return hash({bots:state.bots.map(({chat,sessions,sessionArchive,sessionWorkspaces,memory,...config})=>config),rooms:state.rooms.map(({log,sessions,planning,...config})=>config),integrations:state.integrations,prefs:state.prefs,botConnectors:state.botConnectors,capabilities:state.capabilities,schedules:(state.schedules||[]).map(({runs,nextAt,status,error,...config})=>config),messageBotRequests:(state.messageBotRequests||[]).map(({key,signature,status,jobId})=>[key,signature,status,jobId]),avatarLibraryRevision:this.team.avatars?.revision||0});}
   async checkpoint(state,reason='automatic',force=false){
     const key=this.configKey(state);if(!force&&key===this.lastConfig&&Date.now()-this.lastAt<300000)return;
     const {text}=await this.archive(state,reason);this.lastFileMs=Math.max(Date.now(),(this.lastFileMs||0)+1);const name=new Date(this.lastFileMs).toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,8)+'.json';
@@ -120,7 +124,9 @@ class Backups{
         const text=await fs.readFile(this.team.file,'utf8');currentExists=true;
         const raw=JSON.parse(text);
         state=this.team.longMessages?await this.team.longMessages.restore(raw):raw;
-        before=JSON.stringify(state);cleanupRoster(state);validateState(state);valid=true;
+        before=JSON.stringify(state);cleanupRoster(state);validateState(state);
+        try{validateLibrary(JSON.parse(await fs.readFile(path.join(this.team.data,'avatar-library.json'),'utf8')));}catch(e){if(e.code!=='ENOENT')throw e;}
+        valid=true;
       }catch(e){if(currentExists||e.code!=='ENOENT'){this.lastError='原团队文件损坏，尝试独立备份。';await fs.mkdir(this.root,{recursive:true});await fs.copyFile(this.team.file,path.join(this.root,'damaged-'+Date.now()+'.txt'));}}
       if(valid){
         // An I/O failure while saving a valid migration is not corruption:
@@ -138,13 +144,25 @@ class Backups{
     // Build and verify a complete new tree before replacing memory. Keep the old
     // tree until commit succeeds; an interrupted restore is retried on next load.
     await atomic(pending,JSON.stringify(archive));
-    const staging=path.join(this.team.data,'restore-'+randomUUID()),memory=path.join(this.team.data,'memory'),old=path.join(this.team.data,'memory-before-restore-'+randomUUID());
+    const staging=path.join(this.team.data,'restore-'+randomUUID()),memory=path.join(this.team.data,'memory'),old=path.join(this.team.data,'memory-before-restore-'+randomUUID()),avatarFile=path.join(this.team.data,'avatar-library.json'),stagedAvatar=path.join(staging,'avatar-library.json'),oldAvatar=path.join(this.team.data,'avatar-library-before-restore-'+randomUUID());
     await fs.mkdir(path.join(staging,'memory'),{recursive:true});
     for(const [rel,content] of Object.entries(archive.payload.memory))await atomic(path.join(staging,...rel.split('/')),content);
-    let moved=false;
-    try{await fs.rename(memory,old);moved=true;}catch(e){if(e.code!=='ENOENT')throw e;}
-    try{await fs.rename(path.join(staging,'memory'),memory);await atomic(this.team.file,JSON.stringify(pausedState(archive.payload.team),null,2));}
-    catch(error){await fs.rm(memory,{recursive:true,force:true});if(moved)await fs.rename(old,memory);throw error;}
+    await atomic(stagedAvatar,JSON.stringify(archive.payload.avatarLibrary||{version:1,revision:0,items:[]}));
+    let moved=false,movedAvatar=false,newMemory=false,newAvatar=false;
+    try{
+      try{await fs.rename(memory,old);moved=true;}catch(e){if(e.code!=='ENOENT')throw e;}
+      try{await fs.rename(avatarFile,oldAvatar);movedAvatar=true;}catch(e){if(e.code!=='ENOENT')throw e;}
+      await fs.rename(path.join(staging,'memory'),memory);newMemory=true;
+      await fs.rename(stagedAvatar,avatarFile);newAvatar=true;
+      await atomic(this.team.file,JSON.stringify(pausedState(archive.payload.team),null,2));
+    }catch(error){
+      if(newMemory)await fs.rm(memory,{recursive:true,force:true});
+      if(moved)await fs.rename(old,memory);
+      if(newAvatar)await fs.rm(avatarFile,{force:true});
+      if(movedAvatar)await fs.rename(oldAvatar,avatarFile);
+      await fs.rm(staging,{recursive:true,force:true}).catch(()=>{});
+      throw error;
+    }
     await fs.rm(staging,{recursive:true,force:true});await fs.rm(pending,{force:true});
     this.recovered={at:new Date().toISOString(),reason};
   }

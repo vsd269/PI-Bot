@@ -1,4 +1,5 @@
 'use strict';
+const {createHash}=require('node:crypto');
 const {createQuestion}=require('./questions');
 const {createView}=require('./views');
 const {postToGroup}=require('./group-actions');
@@ -12,6 +13,43 @@ const MAX_HOPS=4;
 function ownerOf(team,sessionId){
   for(const bot of team.state.bots)for(const [key,id] of Object.entries(bot.sessions||{}))if(id===sessionId)return {bot,room:key==='private'?null:team.state.rooms.find(r=>r.id===key)};
   return null;
+}
+async function dispatchMessageBot(team,args,owner,ctx){
+  const matches=team.state.bots.filter(bot=>bot.name===args.to||bot.id===args.to);if(matches.length!==1)throw new Error('No unique Bot named '+args.to);const target=matches[0];
+  if(target.id===owner.bot.id)throw new Error('Cannot message yourself.');
+  const source=team.state.jobs.findLast(job=>job.sessionId===ctx.sessionId&&(!ctx.turnId||job.turnId===ctx.turnId)&&team.active(job));
+  const content=String(args.message||'').trim();if(!content||content.length>1000000)throw Error('Message must have 1–1000000 characters.');
+  team.handoffs.check(source,target.id);if(owner.room&&!owner.room.members.includes(target.id))throw Error('群聊中的任务只能交给本群成员，请先把该 Bot 加入群聊。');
+  if(owner.room&&(target.id===owner.room.adminId||target.role==='Administrator'))throw Error('该成员是群聊规划管理员，请在群聊中直接说明需要其汇总的内容。');
+  const replyTo=args.reply_to==='user'?null:owner.bot.id,parent=!owner.room&&replyTo?team.handoffs.root(source):null;
+  const signature=createHash('sha256').update(JSON.stringify([target.id,content,replyTo,owner.room?.id||null,ctx.sessionId])).digest('hex');
+  const requestId=args.request_id;if(typeof requestId!=='string'||! /^[A-Za-z0-9._:-]{1,120}$/.test(requestId))throw Error('request_id must be 1–120 letters, digits, dots, underscores, colons or hyphens.');
+  const key=owner.bot.id+':'+requestId,admissionKey='message_bot:'+key;
+  const running=team.messageAdmissions.get(admissionKey);
+  if(running){if(running.signature!==signature)throw Error('request_id 已用于另一条消息，请为新任务使用不同编号。');return running.promise;}
+  team.state.messageBotRequests??=[];
+  const previous=team.state.messageBotRequests.find(item=>item.key===key);
+  if(previous){
+    if(previous.signature!==signature)throw Error('request_id 已用于另一条消息，请为新任务使用不同编号。');
+    if(previous.status==='accepted')return JSON.stringify({accepted:true,duplicate:true,jobId:previous.jobId});
+    return JSON.stringify({accepted:false,duplicate:true,status:previous.status,error:previous.error||'该请求未完成。为避免重复派发，请检查队列后使用新的 request_id 重试。'});
+  }
+  if(team.state.messageBotRequests.length>=10000)throw Error('消息去重记录已达上限，请先备份并升级 PI Bot。');
+  const record={key,requestId,sourceBotId:owner.bot.id,targetBotId:target.id,signature,status:'admitting',at:new Date().toISOString()};
+  team.state.messageBotRequests.push(record);
+  const promise=(async()=>{
+    try{
+      await team.save();
+      await team.admitBotMessage();
+      const options={attachments:source?.attachments,referencesText:source?.referencesText,fromBotId:owner.bot.id,fromName:owner.bot.name,replyTo,sourceSessionId:ctx.sessionId,replyRoomId:owner.room?.id,...(parent?{parentJobId:parent.id}:{})};
+      let result;if(owner.room){const child=team.enqueue(owner.room,target,content,undefined,{...options,offRound:true});result={jobId:child.id};await team.save();}else result=await team.privateChat(target.id,content,options);
+      if(parent&&result.jobId)team.handoffs.attach(source,team.state.jobs.find(job=>job.id===result.jobId));await team.save();
+      record.status='accepted';if(result.jobId)record.jobId=result.jobId;await team.save();
+      return JSON.stringify({accepted:true,...result,activity:team.handoffs.activity(target),note:owner.room?'Work stays in this group. Results return here.':'End your turn after delegating; all child results return automatically before your final result is delivered upstream.'});
+    }catch(error){record.status='failed';record.error=String(error.message||error).slice(0,500);await team.save().catch(()=>{});throw error;}
+  })();
+  const admission={signature,promise};team.messageAdmissions.set(admissionKey,admission);
+  try{return await promise;}catch(error){if(record.status==='admitting'){team.state.messageBotRequests=team.state.messageBotRequests.filter(item=>item!==record);await team.save().catch(()=>{});}throw error;}finally{if(team.messageAdmissions.get(admissionKey)===admission)team.messageAdmissions.delete(admissionKey);}
 }
 async function installTools(team){
   const names=[];
@@ -29,7 +67,8 @@ async function installTools(team){
   await register('show_view','Show a view card in your private chat: text, metric, table, progress, chart, local calculator, sandboxed static HTML, options, confirm or a short form. Interactive cards end your turn; answers arrive later as a new assignment. Keep the title and view under 8 KB. Never collect keys, tokens or passwords; use request_secret.',{title:field('Short card title'),view:{type:'object',additionalProperties:true,description:'A component {type,...props}. stack: children[1..16]; text: text; metric: label,value,tone? (good/warn/bad); table: columns[{key,label}],rows as arrays of cells; progress: percent[0..100],label?; options: id,options[{label,description?}],multi?; confirm: id,confirmLabel?,cancelLabel?; form: id,fields[{id,label,placeholder?}],submitLabel?. Also row/stack: children, let (named formula strings); chart: kind bar/hbar/line/area/donut, categories, series [{name,values}], unit?, caption?; slider/number: id,label,min,max,step,value; toggle: id,label,value; choice: id,label,options [{label,value}],value; submit: id,label; callout: text,tone; sources: items [{label,url}]; html: html,summary,height (static isolated display, no scripts/network). Formula values use {"=":"input_id * 2"}; local inputs alone do not await a reply; add submit for sending input values. Only declared props.'},await_reply:{type:'boolean',description:'Defaults to true for interactive cards and false for display-only cards.'}},['title','view'],async(args,owner,ctx)=>createView(team,args,owner,ctx),'medium');
   await register('list_bots','List PI-bot members, their roles and current task statuses, and your visible groups.',{},[],async(_,owner)=>JSON.stringify({bots:team.state.bots.map(b=>({id:b.id,name:b.name,role:b.role,roleLabel:b.roleLabel,instructions:b.instructions,modelKey:b.modelKey,activity:team.handoffs.activity(b),status:team.state.jobs.filter(j=>j.botId===b.id&&team.active(j)).map(j=>({id:j.id,status:j.status,task:j.task.slice(0,250)}))})),groups:team.state.rooms.filter(r=>visible(owner,r)).map(r=>({id:r.id,name:r.name,notice:r.notice,members:r.members,adminId:r.adminId,executionMode:r.executionMode,replyMode:r.replyMode}))}));
   await register('list_models','List models configured and available in PI-Desktop and their thinking levels.',{},[],async()=>JSON.stringify(await team.models()));
-  await register('message_bot','Send a self-contained message to another PI-bot. It queues after that member\'s current assignment. Do not wait in a loop. The response returns later, or goes to the user when reply_to=user.',{to:field('Exact Bot name'),message:field('Task, question or information'),reply_to:{type:'string',enum:['me','user']},when:{type:'string',enum:['now','queue']}},['to','message'],async(args,owner,ctx)=>{
+  await register('message_bot','Send a self-contained message to another PI-bot. It queues after that member\'s current assignment. Do not wait in a loop. The response returns later, or goes to the user when reply_to=user. Generate a fresh request_id for each new task and reuse it only when retrying that same request. If the result is failed or interrupted, inspect the queue before retrying with a new ID.',{to:field('Exact Bot name'),message:field('Task, question or information'),reply_to:{type:'string',enum:['me','user']},when:{type:'string',enum:['now','queue']},request_id:field('Optional stable ID; reuse only for retries of the same request')},['to','message'],async(args,owner,ctx)=>{
+    if(args.request_id!==undefined)return dispatchMessageBot(team,args,owner,ctx);
     const target=find(args.to);if(target.id===owner.bot.id)throw new Error('Cannot message yourself.');
     const source=team.state.jobs.findLast(j=>j.sessionId===ctx.sessionId&&(!ctx.turnId||j.turnId===ctx.turnId)&&team.active(j));
     const content=String(args.message||'').trim();if(!content||content.length>1000000)throw Error('Message must have 1–1000000 characters.');
@@ -98,4 +137,4 @@ async function installTools(team){
   });
   return {names,async close(){for(const name of names)await team.pi.agent?.unregisterTool?.(name);}};
 }
-module.exports={installTools,ownerOf,MAX_HOPS};
+module.exports={installTools,ownerOf,dispatchMessageBot,MAX_HOPS};

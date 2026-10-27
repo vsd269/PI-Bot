@@ -15,6 +15,7 @@ const {deliverRoundReports}=require('./group-reports');
 const {postToGroup}=require('./group-actions');
 const {createBotFrom,createGroupFrom,archiveChat,deliverKickoffs}=require('./roster-actions');
 const {Backups}=require('./backups');
+const {AvatarLibrary}=require('./avatar-library');
 const {migrateIdentity}=require('./identity-migration');
 const {Vault}=require('./vault');
 const {McpBridge}=require('./mcp-bridge');
@@ -92,7 +93,7 @@ class Team {
   }
   async load() {
     this.handoffs=new Handoffs(this);this.data = await this.pi.plugin.getDataPath(); if(!this.identityReady)await migrateIdentity(this.pi,this.data); await fs.mkdir(this.data,{recursive:true}); this.file = path.join(this.data,'team.json');this.longMessages=new LongMessages(this);
-    this.backups=new Backups(this);await this.backups.prepare();
+    this.backups=new Backups(this);await this.backups.prepare();this.avatars=await new AvatarLibrary(this).load();
     try {
       const value = JSON.parse(await fs.readFile(this.file,'utf8'));
       if(value.version !== 1 || !['bots','rooms','jobs'].every(k=>Array.isArray(value[k])))throw new Error('Invalid team file');
@@ -107,7 +108,10 @@ class Team {
     // cannot mistake an execution member for the coordinator.
     for(const bot of this.state.bots)if(bot.role!=='Administrator'&&bot.instructions==='Coordinate the team.')bot.instructions='';
     this.state.completions??=[];this.state.questions??=[];this.state.views??=[];this.state.asides??=[];for(const card of this.state.asides)if(card.status==='answering'){card.status='error';card.error='重启中断了侧问，请重新提问。';}this.state.prefs??={theme:'deepseek',motion:'normal'};
-    this.state.unattended??={sent:0};this.state.archives??=[];
+    this.state.unattended??={sent:0};this.state.archives??=[];this.state.messageBotRequests??=[];
+    if(!Array.isArray(this.state.messageBotRequests)||this.state.messageBotRequests.length>10000||this.state.messageBotRequests.some(request=>!request||typeof request!=='object'||typeof request.key!=='string'||typeof request.signature!=='string'))throw Error('Invalid message bot request ledger');
+    let interruptedMessageRequests=false;
+    for(const request of this.state.messageBotRequests)if(request?.status==='admitting'){request.status='interrupted';request.error='插件重启时请求尚未完成；为避免重复派发，没有自动重试。';interruptedMessageRequests=true;}
     if(!Number.isInteger(this.state.unattended.sent)||this.state.unattended.sent<0)this.state.unattended.sent=0;
     for(const room of this.state.rooms){room.executionMode??='parallel';room.replyMode??='admin';for(const report of room.reports||[])if(!report.roundId&&!report.replyDelivered&&!report.error)report.error='重启中断了群聊派发，请检查聊天记录后再发起。';}
     this.mentions=await import('./upstream/mentions.mjs');
@@ -116,6 +120,7 @@ class Team {
     this.memory=await createMemoryAdapter(this,{review:this.memoryReview});
     this.vault=await new Vault(this).load();this.bridge=new McpBridge(this);this.recovery=new Recovery(this);
     this.integrations=new Integrations(this);await this.integrations.load();
+    if(interruptedMessageRequests)await this.save();
     for(const job of this.state.jobs)if(job.retryJobId&&!this.state.jobs.some(j=>j.id===job.retryJobId))delete job.retryJobId;
     this.tools=await installTools(this);this.schedules=new Schedules(this);await this.schedules.load();
     for(const room of this.state.rooms)room.planning=false;
@@ -177,7 +182,8 @@ class Team {
       const jobs=this.state.jobs.filter(matches),records=[...jobs,...(this.state.completions||[]).filter(matches)];
       usageSummaries[(isRoom?'room:':'bot:')+item.id]={...summarizeUsage(records),tools:jobs.reduce((n,j)=>n+(j.toolCalls||0),0),done:jobs.filter(j=>!this.active(j)).length,legacyAdminUnknown:isRoom?item.log?.some(l=>l.coordinator&&!l.usageId):item.chat?.some(l=>l.coordinator&&!l.usageId)};
     }
-    return structuredClone({...this.vault.cleanState(this.state),permissionRequests:[...(this.permissionRequests?.values()||[])],usageSummaries,botActivity:Object.fromEntries(this.state.bots.map(b=>[b.id,this.handoffs.activity(b)])),executing:this.state.jobs.filter(j=>['running','waiting'].includes(j.status)).map(j=>j.botId),concurrency:'per-group',executionModes:['serial','parallel'],adminExecutes:this.state.bots.some(b=>b.role==='Administrator'&&b.agentMode==='agent'),memoryNews:this.memory?.rt.memoryNews?.()||{},schedules:this.schedules?.view(),capabilities:{nativeBrowser:true,isolatedBotBrowser:true,secretEnvironment:true,speech:true,imageOcr:true,historyIndex:true,externalBotApi:true,midTurnSteering:this.integrations?.operations.has('agent/steer')===true,botSecretVault:true,botMcpBridge:true,taskRecovery:true,nativeCompaction:true}});
+    const {messageBotRequests,...visibleState}=this.state;
+    return structuredClone({...this.vault.cleanState(visibleState),permissionRequests:[...(this.permissionRequests?.values()||[])],usageSummaries,botActivity:Object.fromEntries(this.state.bots.map(b=>[b.id,this.handoffs.activity(b)])),executing:this.state.jobs.filter(j=>['running','waiting'].includes(j.status)).map(j=>j.botId),concurrency:'per-group',executionModes:['serial','parallel'],adminExecutes:this.state.bots.some(b=>b.role==='Administrator'&&b.agentMode==='agent'),memoryNews:this.memory?.rt.memoryNews?.()||{},schedules:this.schedules?.view(),capabilities:{nativeBrowser:true,isolatedBotBrowser:true,secretEnvironment:true,speech:true,imageOcr:true,historyIndex:true,externalBotApi:true,midTurnSteering:this.integrations?.operations.has('agent/steer')===true,botSecretVault:true,botMcpBridge:true,taskRecovery:true,nativeCompaction:true}});
   }
   bot(id){const bot=this.state.bots.find(b=>b.id===id);if(!bot)throw new Error('Bot not found.');return bot;}
   botName(id){const bot=this.state.bots.find(b=>b.id===id);return bot?bot.name:'已移除成员';}
@@ -194,7 +200,8 @@ class Team {
         if(!input.avatar||typeof input.avatar!=='object'||Array.isArray(input.avatar))throw new Error('头像格式无效。');
         const next={};
         if(input.avatar.shape!==undefined){if(!hasShape(input.avatar.shape))throw new Error('头像形象不存在。');next.shape=input.avatar.shape;}
-        if(input.avatar.image!==undefined){const image=input.avatar.image;if(typeof image!=='string'||!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>300000)throw new Error('头像图片无效或过大。');next.image=image;}
+        if(input.avatar.libraryId!==undefined){const item=this.avatars?.find(input.avatar.libraryId);if(!item)throw new Error('共享头像不存在，请重新选择。');next.libraryId=item.id;next.image=item.image;}
+        else if(input.avatar.image!==undefined){const image=input.avatar.image;if(typeof image!=='string'||!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>300000)throw new Error('头像图片无效或过大。');next.image=image;}
         patch.avatar=next;
       }
     }
@@ -642,7 +649,7 @@ class Team {
     }
   }
   submitMessage(kind,targetId,content,options={}){
-    if(/^\/btw(?:\s|$)/i.test(content)){if(kind!=='bot')throw Error('/btw 侧问仅用于 Bot 私聊。');if(options.attachments?.length||options.references?.length)throw Error('侧问暂不支持附件或引用，请使用普通消息发送。');return require('./asides').ask(this,{botId:targetId,question:content.replace(/^\/btw\s*/i,''),clientMessageId:options.clientMessageId});}
+    if(/^\/(?:btw|side)(?:\s|$)/i.test(content)){if(kind!=='bot')throw Error('/btw 或 /side 侧问仅用于 Bot 私聊。');if(options.attachments?.length||options.references?.length)throw Error('侧问暂不支持附件或引用，请使用普通消息发送。');return require('./asides').ask(this,{botId:targetId,question:content.replace(/^\/(?:btw|side)\s*/i,''),clientMessageId:options.clientMessageId});}
     if(!options.clientMessageId)return kind==='room'?this.sendGroup(targetId,content,options):this.privateChat(targetId,content,options);
     bounded(content,'Message');if(this.stopped)throw new Error('PI-bot is stopping.');
     const target=kind==='room'?this.room(targetId):this.bot(targetId),id=options.clientMessageId;

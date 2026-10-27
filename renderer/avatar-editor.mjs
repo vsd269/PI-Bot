@@ -23,6 +23,18 @@ export async function avatarImage(file){
   throw new Error('这张图片太大，换一张试试');
 }
 
+async function libraryImage(image){
+  const bitmap=await createImageBitmap(await (await fetch(image)).blob());
+  try{
+    const render=(size,quality)=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=size;canvas.getContext('2d').drawImage(bitmap,0,0,size,size);return canvas.toDataURL('image/webp',quality);};
+    let full='';for(const size of [160,128,96]){for(const quality of [.75,.6,.48]){const value=render(size,quality);if(value.startsWith('data:image/webp')&&value.length<=36000){full=value;break;}}if(full)break;}
+    if(!full)throw new Error('这张图片无法压缩到共享头像库的大小，请换一张图片。');
+    let thumbnail='';for(const size of [64,48,32]){for(const quality of [.65,.5,.38]){const value=render(size,quality);if(value.startsWith('data:image/webp')&&value.length<=3000){thumbnail=value;break;}}if(thumbnail)break;}
+    if(!thumbnail)throw new Error('无法生成头像预览，请换一张图片。');
+    return {image:full,thumbnail};
+  }finally{bitmap.close?.();}
+}
+
 // The selection ring follows the shape: a 1px line 3px outside it.
 function shapeRing(shape,size){
   const def=shapeOf(shape),unit=def.size/size,id='pi-ring-'+nextMarkSerial();
@@ -51,10 +63,10 @@ export function mark(look,size,live=true,{id='',gaze=false,pokeable=false}={}){
 
 // The avatar editor: the Bot tab picks a character and colour, the Upload tab takes
 // a photo, and Reset returns to the look the Bot id gives. Every choice saves.
-export function avatarEditor({bot,onSave,onError,onClose,anchor}){
+export function avatarEditor({bot,onSave,onLibrary,onError,onClose,anchor}){
   const box=el('div','','bt-avedit');
   box.setAttribute('role','dialog');box.setAttribute('aria-label','头像编辑');
-  let tab=lookOf(bot).image?'upload':'bot',over=false,page=0;
+  let tab=bot.avatar?.libraryId?'library':lookOf(bot).image?'upload':'bot',over=false,page=0,libraryPage=0,libraryData=null,libraryLoading=false,uploaded=null;
   const pageSize=36;
   const shapeButtons=new Map(),colorButtons=new Map();
   function choose(patch){
@@ -70,10 +82,10 @@ export function avatarEditor({bot,onSave,onError,onClose,anchor}){
   tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','头像来源');
   tabs.append(el('span','','bt-thumb'));
   const tabButtons={};
-  for(const [id,label] of [['bot','图标'],['upload','上传']]){
+  for(const [id,label] of [['bot','图标'],['upload','上传'],['library','共享库']]){
     const button=el('button',label,'bt-avedit-tab');
     button.type='button';button.setAttribute('role','tab');
-    button.onclick=()=>{tab=id;draw();};
+    button.onclick=()=>{tab=id;if(id==='library')void loadLibrary(libraryPage);else draw();};
     tabButtons[id]=button;tabs.append(button);
   }
   const reset=el('button','重置','bt-avedit-tab bt-avedit-reset');
@@ -93,7 +105,13 @@ export function avatarEditor({bot,onSave,onError,onClose,anchor}){
   file.onchange=()=>{const chosen=file.files?.[0];file.value='';if(chosen)upload(chosen);};
   box.append(file);
   function fail(error){onError(error?.message||String(error));}
-  function upload(chosen){if(!chosen)return;avatarImage(chosen).then(image=>{choose({avatar:{...(bot.avatar??{}),image}});tab='upload';draw();}).catch(fail);}
+  function upload(chosen){if(!chosen)return;avatarImage(chosen).then(image=>{uploaded={image,name:String(chosen.name||'').replace(/\.[^.]+$/,'').slice(0,80)};choose({avatar:{image}});tab='upload';draw();}).catch(fail);}
+  async function loadLibrary(nextPage){
+    libraryPage=Math.max(0,nextPage);libraryLoading=true;draw();
+    try{libraryData=await onLibrary({action:'list',page:libraryPage});libraryPage=libraryData.page;}
+    catch(error){fail(error);}
+    finally{libraryLoading=false;draw();}
+  }
   function draw(){
     const look=lookOf(bot),hasPhoto=Boolean(look.image);
     for(const [id,button] of Object.entries(tabButtons))button.setAttribute('aria-selected',String(tab===id));
@@ -143,7 +161,7 @@ export function avatarEditor({bot,onSave,onError,onClose,anchor}){
       next.onclick=()=>{page=Math.min(pageCount-1,page+1);draw();};
       pages.append(previous,indicator,next);
       body.append(grid,colors,pages);syncPalette(look);
-    }else{
+    }else if(tab==='upload'){
       const zone=el('div','','bt-dropzone');
       zone.toggleAttribute('data-over',over);
       zone.ondragover=event=>{event.preventDefault();over=true;zone.toggleAttribute('data-over',true);};
@@ -164,6 +182,30 @@ export function avatarEditor({bot,onSave,onError,onClose,anchor}){
       }
       zone.append(actions);
       body.append(zone);
+      const candidate=uploaded?.image||(!bot.avatar?.libraryId?look.image:null);
+      if(candidate){
+        const saveRow=el('div','','bt-avatar-library-save'),name=document.createElement('input');
+        name.type='text';name.maxLength=80;name.placeholder='头像名称';name.setAttribute('aria-label','共享头像名称');name.value=uploaded?.name||'';
+        const save=el('button','保存到共享库','bt-soft bt-soft-sm');save.type='button';save.disabled=!name.value.trim();
+        name.oninput=()=>{save.disabled=!name.value.trim();};
+        save.onclick=async()=>{save.disabled=true;try{const data=await libraryImage(candidate),result=await onLibrary({action:'add',name:name.value.trim(),...data});uploaded=null;libraryData=null;tab='library';libraryPage=Math.max(0,Math.ceil(result.total/12)-1);await loadLibrary(libraryPage);}catch(error){fail(error);save.disabled=false;}};
+        saveRow.append(name,save);body.append(saveRow);
+      }
+    }else{
+      if(libraryLoading&&!libraryData){body.append(el('div','正在读取共享头像…','bt-avatar-library-empty'));return;}
+      const data=libraryData||{items:[],page:0,pageCount:1,total:0},grid=el('div','','bt-library-grid');
+      if(!data.items.length)grid.append(el('div','共享头像库还是空的。可先在“上传”页保存头像。','bt-avatar-library-empty'));
+      for(const item of data.items){
+        const row=el('div','','bt-library-item'),pick=el('button','','bt-library-pick');pick.type='button';pick.setAttribute('aria-label','使用头像：'+item.name);pick.title=item.name;
+        const img=document.createElement('img');img.src=item.thumbnail;img.alt='';img.draggable=false;pick.append(img,el('span',item.name,'bt-library-name'));pick.onclick=async()=>{pick.disabled=true;try{const selected=await onLibrary({action:'get',id:item.id});choose({avatar:{libraryId:selected.id,image:selected.image}});}catch(error){fail(error);}finally{pick.disabled=false;}};
+        row.append(pick);
+        if(item.used){row.append(el('span','使用中 · '+item.used,'bt-library-used'));}
+        else{const remove=el('button','删除','bt-soft bt-soft-sm');remove.type='button';remove.setAttribute('aria-label','删除共享头像：'+item.name);remove.onclick=async()=>{remove.disabled=true;try{await onLibrary({action:'delete',id:item.id});await loadLibrary(libraryPage);}catch(error){fail(error);remove.disabled=false;}};row.append(remove);}
+        grid.append(row);
+      }
+      const pages=el('div','','bt-avatar-pages'),previous=el('button','上一页','bt-soft bt-soft-sm'),indicator=el('span',`${data.page+1} / ${data.pageCount}`,'bt-avatar-page-indicator'),next=el('button','下一页','bt-soft bt-soft-sm');
+      previous.type=next.type='button';previous.disabled=data.page===0;next.disabled=data.page>=data.pageCount-1;previous.onclick=()=>void loadLibrary(data.page-1);next.onclick=()=>void loadLibrary(data.page+1);pages.append(previous,indicator,next);
+      body.append(grid,pages);
     }
   }
   function onPaste(event){
@@ -177,7 +219,7 @@ export function avatarEditor({bot,onSave,onError,onClose,anchor}){
   window.addEventListener('paste',onPaste);
   window.addEventListener('keydown',onKey,true);
   window.addEventListener('pointerdown',onDown,true);
-  draw();
+  draw();if(tab==='library')void loadLibrary(0);
   return {node:box,dispose(){window.removeEventListener('paste',onPaste);window.removeEventListener('keydown',onKey,true);window.removeEventListener('pointerdown',onDown,true);}};
 }
 

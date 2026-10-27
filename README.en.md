@@ -2,11 +2,13 @@
 
 Persistent Bot teams for **PI Desktop**. [简体中文](README.md)
 
-PI Bot is an independently maintained adaptation of [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DeepSeek-Bot distribution, and it does not claim complete feature parity.
+PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DS Bot distribution, and it does not claim complete feature parity.
 
-## New in 0.3.85
+## New in 0.3.86
 
-Adapted from DeepSeek-Bot 0.2.1: independent `/btw` side questions, charts and formula calculators, persisted group mention pause/continue, bubble/flat layouts and width controls, optional thinking display, secret purpose editing, unreadable-memory protection, and narrow/touch improvements. See [release notes](docs/RELEASE-0.3.85.md) for entry points and limits.
+Adds a shared avatar library, `/side` as an alias for `/btw`, deletion of completed side questions, unread Bot-to-Bot queue indicators, and `message_bot` request ID deduplication. See the [0.3.86 release notes](docs/RELEASE-0.3.86.md) for entry points and limits.
+
+The 0.3.85 migration from DS Bot 0.2.1 added `/btw` side questions, charts and formula calculators, persisted group mention pause/continue, bubble/flat layouts and width controls, optional thinking display, secret-purpose editing, unreadable-memory protection, and narrow/touch improvements. See [0.3.85 release notes](docs/RELEASE-0.3.85.md).
 
 Side questions use the Bot's configured model and incur normal usage. Cancellation ignores late answers; PI does not expose cancellation of the underlying one-shot request. HTML cards are static opaque-origin sandboxes with scripts and network disabled. Upstream standalone-client packaging, account management and browser-profile cookie import are not included.
 
@@ -56,7 +58,7 @@ See [connector guidance](CONNECTORS.md), [contribution guide](CONTRIBUTING.md), 
 
 ## Credits and license
 
-Based on **Fei2411 / DeepSeek-Bot** under Apache-2.0. Original notices, earlier upstream identities and migration records are retained in [NOTICE](NOTICE) and [source provenance](renderer/upstream/provenance.json). The bundled `ws` dependency retains its [MIT license](src/vendor/ws/LICENSE). User-supplied avatar artwork and existing attribution are retained; no rights in third-party marks are claimed.
+Based on **Fei2411 / DS Bot** (the upstream repository retains its historical `DeepSeek-Bot` URL) under Apache-2.0. Original notices, earlier upstream identities and migration records are retained in [NOTICE](NOTICE) and [source provenance](renderer/upstream/provenance.json). The bundled `ws` dependency retains its [MIT license](src/vendor/ws/LICENSE). User-supplied avatar artwork and existing attribution are retained; no rights in third-party marks are claimed.
 
 Code is distributed under [Apache License 2.0](LICENSE). This repository does not bundle or modify PI Desktop client binaries.
 

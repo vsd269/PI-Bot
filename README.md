@@ -10,9 +10,13 @@
   <p>简体中文 · <a href="README.en.md">English</a></p>
 </div>
 
-PI Bot 是基于 [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习、迁移和持续调整的 **PI Desktop 适配项目**。项目保留上游的 Bot 团队、群聊协作等设计思路，并将运行、工具、权限和界面接入 PI Desktop 的插件接口。
+PI Bot 是基于 [DS Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习、迁移和持续调整的 **PI Desktop 适配项目**。项目保留上游的 Bot 团队、群聊协作等设计思路，并将运行、工具、权限和界面接入 PI Desktop 的插件接口。
 
-感谢原作者的开源工作。本项目是独立维护的衍生适配版，不是 DeepSeek-Bot 的官方发行版，也不声称所有能力与上游完全一致。
+感谢 DS Bot 原作者的开源工作。本项目是独立维护的衍生适配版，不是 DS Bot 的官方发行版，也不声称所有能力与上游完全一致。
+
+## 0.3.86 新功能
+
+新增共享头像库、`/side` 侧问别名、已结束侧问删除、Bot 队列未读提示，以及 `message_bot` 请求编号去重。入口、迁移范围与限制见 [0.3.86 版本说明](docs/RELEASE-0.3.86.md)。
 
 ## 可以做什么
 
@@ -30,9 +34,7 @@ PI Bot 是基于 [DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习�
 | 本地工作流 | 定时任务、任务恢复入口、浏览器工具、用量与备份管理 |
 | 界面 | 明暗模式、气泡/平铺、消息宽度、思考显示、自定义头像和会话侧栏 |
 
-## 0.3.85 新功能
-
-功能入口、迁移范围及限制见 [0.3.85 版本说明](docs/RELEASE-0.3.85.md)：`/btw` 侧问、图表与本地计算卡片、群内文字交接暂停/继续、外观设置及密钥用途备注。HTML 仅静态隔离展示，取消侧问不保证中断宿主底层模型请求。
+上一版的 `/btw` 侧问、图表与本地计算卡片、群内文字交接暂停/继续、外观设置及密钥用途备注见 [0.3.85 版本说明](docs/RELEASE-0.3.85.md)。HTML 仅静态隔离展示，取消侧问不保证中断宿主底层模型请求。
 
 ## 界面预览
 
@@ -112,7 +114,7 @@ manifest.json  PI Desktop 插件声明
 
 ## 致谢与许可证
 
-- 上游项目：[Fei2411 / DeepSeek-Bot](https://github.com/Fei2411/DeepSeek-Bot)，历史来源与移植记录保存在 [NOTICE](NOTICE) 和 [provenance.json](renderer/upstream/provenance.json)。
+- 上游项目：[Fei2411 / DS Bot](https://github.com/Fei2411/DeepSeek-Bot)，仓库地址沿用原 URL；历史来源与移植记录保存在 [NOTICE](NOTICE) 和 [provenance.json](renderer/upstream/provenance.json)。
 - 宿主客户端：[PI Desktop](https://github.com/vsd269/PI-Desktop)。本仓库不包含或修改其客户端二进制。
 - 随包收录的 `ws` 使用 MIT 许可证，见 [依赖许可证](src/vendor/ws/LICENSE)。
 - PI Bot 随附用户提供的头像素材；保留原有素材与第三方来源说明，不主张对第三方商标或标识的权利。

@@ -9,7 +9,7 @@ export function activityLabel(job){
   if(!job)return '空闲';
   if(job.status==='waiting')return '等待你的批准';
   if(job.status==='waiting_teammates')return '等待队友交回结果';
-  if(job.status==='queued')return '排队等待';
+  if(job.status==='queued')return job.fromBotId?'尚未读取':'排队等待';
   if(job.status==='launching')return '正在启动';
   if(phaseWords[job.activityPhase])return phaseWords[job.activityPhase];
   if(job.currentTool&&['running','pending','waiting'].includes(job.currentToolStatus))return (toolWords[job.currentTool]||'使用 '+job.currentTool)+(job.toolCalls?' · '+job.toolCalls+' 次工具调用':'');
@@ -21,7 +21,7 @@ export function memberWork(state,room){
     const active=state.jobs.filter(j=>j.botId===id&&ACTIVE.includes(j.status));
     const here=active.filter(j=>j.roomId===room.id).sort((a,b)=>rank[a.status]-rank[b.status]);
     const job=here[0]||active.sort((a,b)=>rank[a.status]-rank[b.status])[0];
-    return {id,bot:state.bots.find(b=>b.id===id),job,here:here.length>0,queued:here.filter(j=>j.status==='queued').length};
+    return {id,bot:state.bots.find(b=>b.id===id),job,here:here.length>0,queued:here.filter(j=>j.status==='queued').length,unread:here.filter(j=>j.status==='queued'&&j.fromBotId).length};
   }).filter(entry=>entry.bot);
 }
 export function createMemberDock({composer,avatar,openGroup}){
@@ -34,6 +34,7 @@ export function createMemberDock({composer,avatar,openGroup}){
     const faces=el('span','','pi-member-faces');for(const entry of sorted.slice(0,3))faces.append(avatar(entry.bot,20,avatarState(state,entry.bot.id),false));
     const asks=sorted.filter(e=>e.job.status==='waiting'),workers=sorted.filter(e=>e.job.status!=='waiting'),copy=el('span','','pi-member-dock-copy');
     if(asks.length)copy.append(el('span',(room?'':'在 '+asks[0].room.name+' · ')+asks.slice(0,2).map(e=>e.bot.name).join('、')+(asks.length>2?' 等 '+asks.length+' 位':'')+' 等待你的批准','pi-member-waiting'));
+    const unread=sorted.reduce((count,entry)=>count+(entry.unread||0),0);if(unread)copy.append(el('span','尚未读取 · '+unread+' 条待办','pi-member-unread'));
     if(workers.length){const first=workers[0];copy.append(el('span',(room?first.bot.name:'在 '+first.room.name)+' · '+activityLabel(first.job)+(workers.length>1?' +'+(workers.length-1):'')));}
     dock.append(faces,copy,el('span','›'));morphWidth(dock,()=>{},previousWidth);dock.setAttribute('aria-label',room?'查看群聊工作状态':'查看正在执行的群聊');
     dock.onclick=()=>openGroup(room?.id||sorted[0].room.id);

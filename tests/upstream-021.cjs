@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
-const {Team}=require('../src/team'),{Vault}=require('../src/vault'),{Handoffs}=require('../src/handoffs'),{createMemoryAdapter}=require('../src/memory');
-const relay=require('../src/group-relay'),asides=require('../src/asides'),{checkedView,checkedAnswer}=require('../src/views'),{validateState,pausedState}=require('../src/backups');
+const {Team}=require('../src/team'),{Vault}=require('../src/vault'),{Handoffs}=require('../src/handoffs'),{createMemoryAdapter}=require('../src/memory'),{AvatarLibrary}=require('../src/avatar-library'),{dispatchMessageBot}=require('../src/tools');
+const relay=require('../src/group-relay'),asides=require('../src/asides'),{checkedView,checkedAnswer}=require('../src/views'),{validateState,pausedState,Backups,parseArchive}=require('../src/backups');
 const gate=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
 async function fixture(ctx){
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'pi-upstream-021-'));const t=new Team({__testHost:true,models:{list:async()=>[{key:'test/model',isDefault:true}]},agent:{complete:async()=>({text:'独立回答',usage:{inputTokens:10,outputTokens:5}})}});
@@ -49,6 +49,9 @@ test('side questions use independent text completion, preserve main history and 
 test('side question submission is idempotent; group use is rejected',async ctx=>{
   const t=await fixture(ctx),input={botId:'a',question:'进度？',clientMessageId:'same'};const results=await Promise.all([asides.ask(t,input),asides.ask(t,input)]);assert.equal(results[0].id,results[1].id);assert.equal(t.state.asides.length,1);assert.throws(()=>t.submitMessage('room','room','/btw 问题'),/仅用于 Bot 私聊/);
 });
+test('side alias works and ended side-question cards can be permanently deleted',async ctx=>{
+  const t=await fixture(ctx);t.pi.agent.complete=async()=>({text:'状态正常。',usage:{inputTokens:3,outputTokens:2}});await t.submitMessage('bot','a','/side 当前状态？',{clientMessageId:'side-client'});await Promise.all([...t.background]);assert.equal(t.state.asides[0].status,'answered');const id=t.state.asides[0].id;assert.deepEqual(await asides.operate(t,{id,action:'delete'}),{id,deleted:true});assert.equal(t.state.asides.length,0);validateState(t.state);
+});
 test('cancel and dismiss survive late completion and backup validation',async ctx=>{
   const t=await fixture(ctx),g=gate();t.pi.agent.complete=()=>g.promise;const reply=await asides.ask(t,{botId:'a',question:'临时问题'});await asides.operate(t,{id:reply.id,action:'cancel'});await asides.operate(t,{id:reply.id,action:'dismiss'});g.resolve({text:'迟到答案'});await Promise.all([...t.background]);assert.equal(t.state.asides[0].status,'cancelled');assert.equal(t.state.asides[0].dismissed,true);assert.equal(t.state.asides[0].answer,undefined);validateState(t.state);const paused=pausedState({...t.state,asides:[{...t.state.asides[0],status:'answering'}]});assert.equal(paused.asides[0].status,'cancelled');
 });
@@ -66,7 +69,31 @@ test('secret replacement and encrypted transfer preserve purpose metadata',async
 });
 test('new operations are admitted through the actual renderer bridge allowlist',async()=>{
   const source=await fs.readFile(path.join(__dirname,'../main.js'),'utf8'),allowlist=source.split('\n').find(line=>line.includes("if(!['team.updates'"));
-  for(const op of ['team.group.continue','team.btw.start','team.btw.action','team.secret.purpose'])assert(allowlist.includes("'"+op+"'"),op);
+  for(const op of ['team.group.continue','team.btw.start','team.btw.action','team.secret.purpose','team.avatar.library'])assert(allowlist.includes("'"+op+"'"),op);
+});
+test('message_bot request IDs make concurrent and later retries idempotent',async ctx=>{
+  const t=await fixture(ctx),gateCall=gate();let calls=0;t.admitBotMessage=async()=>{};t.privateChat=async()=>{calls++;await gateCall.promise;return {jobId:'result-job'};};const args={to:'Bravo',message:'检查服务状态',request_id:'status-check-1'},owner={bot:t.bot('a'),room:null},context={sessionId:'native-a',turnId:'turn-1'};const first=dispatchMessageBot(t,args,owner,context);while(!t.messageAdmissions.size)await new Promise(resolve=>setTimeout(resolve,1));const second=dispatchMessageBot(t,args,owner,context);gateCall.resolve();const [a,b]=await Promise.all([first,second]);assert.equal(calls,1);assert.equal(a,b);assert.equal(JSON.parse(a).jobId,'result-job');const retry=JSON.parse(await dispatchMessageBot(t,args,owner,context));assert.equal(retry.duplicate,true);assert.equal(retry.jobId,'result-job');await assert.rejects(()=>dispatchMessageBot(t,{...args,message:'不同内容'},owner,context),/request_id/);
+});
+test('queued Bot-to-Bot messages are exposed as unread without changing PI queue status',async ctx=>{
+  const t=await fixture(ctx);t.state.jobs.push({id:'unread-job',botId:'b',fromBotId:'a',roomId:'room',status:'queued',task:'检查队列'});const activity=t.handoffs.activity(t.bot('b'));assert.equal(activity.unreadMessages.length,1);const {activityLabel}=await import('../renderer/member-status.mjs');assert.equal(activityLabel(t.state.jobs.at(-1)),'尚未读取');assert.equal(t.state.jobs.at(-1).status,'queued');
+});
+test('shared avatar library paginates, protects assigned images and round-trips through backups',async ctx=>{
+  const t=await fixture(ctx);t.avatars=await new AvatarLibrary(t).load();const image='data:image/webp;base64,YQ==',thumbnail='data:image/webp;base64,Yg==';let first;
+  for(let index=0;index<13;index++){const result=await t.avatars.add({name:'头像 '+index,image,thumbnail});if(index===0)first=result.item;}
+  assert.equal(t.avatars.list({page:0}).items.length,12);assert.equal(t.avatars.list({page:1}).items.length,1);assert.equal(t.avatars.list({page:1}).total,13);
+  assert.deepEqual(t.avatars.operation({action:'get',id:first.id}),{id:first.id,image});
+  const selected=await t.setAppearance({botId:'a',avatar:{libraryId:first.id,image:thumbnail}});assert.equal(selected.avatar.image,image);assert.equal(t.bot('a').avatar.libraryId,first.id);await assert.rejects(()=>t.avatars.remove(first.id),/正用于/);
+  const {text}=await new Backups(t).archive();const archive=parseArchive(text);assert.equal(archive.payload.avatarLibrary.items.length,13);assert.equal(archive.payload.avatarLibrary.items[0].id,first.id);
+  const other=await fs.mkdtemp(path.join(os.tmpdir(),'pi-avatar-restore-'));ctx.after(()=>fs.rm(other,{recursive:true,force:true,maxRetries:4,retryDelay:100}));const restored=new AvatarLibrary({...t,data:other});await restored.restore(archive.payload.avatarLibrary);assert.equal(restored.operation({action:'get',id:first.id}).image,image);assert.equal(restored.list({page:1}).items.length,1);
+});
+test('backup avatar-library rename failure rolls back memory and retries restore',async ctx=>{
+  const t=await fixture(ctx);t.avatars=await new AvatarLibrary(t).load();const oldImage='data:image/webp;base64,YQ==',newImage='data:image/webp;base64,Yg==';
+  const target=await t.avatars.add({name:'备份头像',image:oldImage,thumbnail:newImage});await fs.mkdir(path.join(t.data,'memory'),{recursive:true});await fs.writeFile(path.join(t.data,'memory','note.md'),'备份记忆');await t.save();
+  const backup=new Backups(t),archive=await backup.archive();t.bot('a').name='本地团队';await t.save();const current=await t.avatars.add({name:'当前头像',image:newImage,thumbnail:oldImage});
+  await fs.writeFile(path.join(t.data,'memory','note.md'),'当前记忆');await fs.mkdir(backup.root,{recursive:true});await fs.writeFile(path.join(backup.root,'pending.json'),archive.text);
+  const avatarFile=t.avatars.file,rename=fs.rename;ctx.mock.method(fs,'rename',async(from,to,...args)=>{if(from===avatarFile&&String(to).includes('avatar-library-before-restore-'))throw Error('AVATAR_MOVE_FAILURE');return rename(from,to,...args);});
+  await assert.rejects(()=>new Backups(t).prepare(),/AVATAR_MOVE_FAILURE/);assert.equal(await fs.readFile(path.join(t.data,'memory','note.md'),'utf8'),'当前记忆');assert.equal(await fs.readFile(path.join(t.data,'avatar-library.json'),'utf8').then(JSON.parse).then(v=>v.items.length),2);assert.equal(JSON.parse(await fs.readFile(t.file,'utf8')).bots.find(b=>b.id==='a').name,'本地团队');
+  ctx.mock.restoreAll();await new Backups(t).prepare();assert.equal(JSON.parse(await fs.readFile(t.file,'utf8')).bots.find(b=>b.id==='a').name,'Alpha');assert.equal(await fs.readFile(path.join(t.data,'memory','note.md'),'utf8'),'备份记忆');assert.equal(JSON.parse(await fs.readFile(t.avatars.file,'utf8')).items[0].id,target.item.id);assert.equal((await new AvatarLibrary(t).load()).operation({action:'get',id:target.item.id}).image,oldImage);assert.notEqual(current.item.id,target.item.id);
 });
 test('pending relays survive Team restart and are removed with a deleted Bot',async ctx=>{
   const t=await fixture(ctx),room=t.room('room');room.relayLimit=1;await t.delegateMentions(room,source(t,'@Bravo @Charlie 检查'));const saved=JSON.parse(await fs.readFile(t.file,'utf8'));t.state=saved;await relay.resume(t,t.room('room'));assert.equal(t.room('room').pausedRelays.length,0);assert(t.state.jobs.some(j=>j.botId==='c'&&j.relayKey));

@@ -37,8 +37,14 @@ async function askOnce(team,{botId,question,clientMessageId}){
   return {accepted:true,id:record.id,clientMessageId};
 }
 async function operate(team,input){
-  if(!['dismiss','cancel'].includes(input.action))throw Error('无效的侧问操作。');
+  if(!['dismiss','cancel','delete'].includes(input.action))throw Error('无效的侧问操作。');
   const record=team.state.asides?.find(c=>c.id===input.id);if(!record)throw Error('侧问不存在。');
+  if(input.action==='delete'){
+    if(record.status==='answering')throw Error('侧问仍在回答中，请先取消或等待结束。');
+    const index=team.state.asides.indexOf(record);team.state.asides.splice(index,1);
+    try{await team.save();}catch(error){team.state.asides.splice(index,0,record);throw error;}
+    return {id:record.id,deleted:true};
+  }
   const before={...record};if(record.status==='answering')record.status='cancelled';
   if(input.action==='dismiss')record.dismissed=true;else if(input.action!=='cancel')throw Error('无效的侧问操作。');
   try{await team.save();}catch(error){Object.assign(record,before);if(!Object.hasOwn(before,'dismissed'))delete record.dismissed;throw error;}
