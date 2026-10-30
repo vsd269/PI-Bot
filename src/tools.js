@@ -1,5 +1,6 @@
 'use strict';
-const {createHash}=require('node:crypto');
+const groupWork=require('./group-stop');
+const {dispatchMessageBot,delegationStatus}=require('./message-requests');
 const {createQuestion}=require('./questions');
 const {createView}=require('./views');
 const {postToGroup}=require('./group-actions');
@@ -8,48 +9,12 @@ const {linesOf}=require('./history');
 const {pageLines}=require('./coordination');
 const {expand}=require('./capabilities');
 const {resourcePath}=require('./skill-import');
+const privacy=require('./privacy');
 // Legacy export only; handoffs use dependency ancestry rather than a hop limit.
 const MAX_HOPS=4;
 function ownerOf(team,sessionId){
   for(const bot of team.state.bots)for(const [key,id] of Object.entries(bot.sessions||{}))if(id===sessionId)return {bot,room:key==='private'?null:team.state.rooms.find(r=>r.id===key)};
   return null;
-}
-async function dispatchMessageBot(team,args,owner,ctx){
-  const matches=team.state.bots.filter(bot=>bot.name===args.to||bot.id===args.to);if(matches.length!==1)throw new Error('No unique Bot named '+args.to);const target=matches[0];
-  if(target.id===owner.bot.id)throw new Error('Cannot message yourself.');
-  const source=team.state.jobs.findLast(job=>job.sessionId===ctx.sessionId&&(!ctx.turnId||job.turnId===ctx.turnId)&&team.active(job));
-  const content=String(args.message||'').trim();if(!content||content.length>1000000)throw Error('Message must have 1–1000000 characters.');
-  team.handoffs.check(source,target.id);if(owner.room&&!owner.room.members.includes(target.id))throw Error('群聊中的任务只能交给本群成员，请先把该 Bot 加入群聊。');
-  if(owner.room&&(target.id===owner.room.adminId||target.role==='Administrator'))throw Error('该成员是群聊规划管理员，请在群聊中直接说明需要其汇总的内容。');
-  const replyTo=args.reply_to==='user'?null:owner.bot.id,parent=!owner.room&&replyTo?team.handoffs.root(source):null;
-  const signature=createHash('sha256').update(JSON.stringify([target.id,content,replyTo,owner.room?.id||null,ctx.sessionId])).digest('hex');
-  const requestId=args.request_id;if(typeof requestId!=='string'||! /^[A-Za-z0-9._:-]{1,120}$/.test(requestId))throw Error('request_id must be 1–120 letters, digits, dots, underscores, colons or hyphens.');
-  const key=owner.bot.id+':'+requestId,admissionKey='message_bot:'+key;
-  const running=team.messageAdmissions.get(admissionKey);
-  if(running){if(running.signature!==signature)throw Error('request_id 已用于另一条消息，请为新任务使用不同编号。');return running.promise;}
-  team.state.messageBotRequests??=[];
-  const previous=team.state.messageBotRequests.find(item=>item.key===key);
-  if(previous){
-    if(previous.signature!==signature)throw Error('request_id 已用于另一条消息，请为新任务使用不同编号。');
-    if(previous.status==='accepted')return JSON.stringify({accepted:true,duplicate:true,jobId:previous.jobId});
-    return JSON.stringify({accepted:false,duplicate:true,status:previous.status,error:previous.error||'该请求未完成。为避免重复派发，请检查队列后使用新的 request_id 重试。'});
-  }
-  if(team.state.messageBotRequests.length>=10000)throw Error('消息去重记录已达上限，请先备份并升级 PI Bot。');
-  const record={key,requestId,sourceBotId:owner.bot.id,targetBotId:target.id,signature,status:'admitting',at:new Date().toISOString()};
-  team.state.messageBotRequests.push(record);
-  const promise=(async()=>{
-    try{
-      await team.save();
-      await team.admitBotMessage();
-      const options={attachments:source?.attachments,referencesText:source?.referencesText,fromBotId:owner.bot.id,fromName:owner.bot.name,replyTo,sourceSessionId:ctx.sessionId,replyRoomId:owner.room?.id,...(parent?{parentJobId:parent.id}:{})};
-      let result;if(owner.room){const child=team.enqueue(owner.room,target,content,undefined,{...options,offRound:true});result={jobId:child.id};await team.save();}else result=await team.privateChat(target.id,content,options);
-      if(parent&&result.jobId)team.handoffs.attach(source,team.state.jobs.find(job=>job.id===result.jobId));await team.save();
-      record.status='accepted';if(result.jobId)record.jobId=result.jobId;await team.save();
-      return JSON.stringify({accepted:true,...result,activity:team.handoffs.activity(target),note:owner.room?'Work stays in this group. Results return here.':'End your turn after delegating; all child results return automatically before your final result is delivered upstream.'});
-    }catch(error){record.status='failed';record.error=String(error.message||error).slice(0,500);await team.save().catch(()=>{});throw error;}
-  })();
-  const admission={signature,promise};team.messageAdmissions.set(admissionKey,admission);
-  try{return await promise;}catch(error){if(record.status==='admitting'){team.state.messageBotRequests=team.state.messageBotRequests.filter(item=>item!==record);await team.save().catch(()=>{});}throw error;}finally{if(team.messageAdmissions.get(admissionKey)===admission)team.messageAdmissions.delete(admissionKey);}
 }
 async function installTools(team){
   const names=[];
@@ -59,14 +24,17 @@ async function installTools(team){
     await team.pi.agent.registerTool({name,description,risk,schema:{type:'object',properties,required,additionalProperties:false},execute:async(args,ctx)=>{
       const owner=ownerOf(team,ctx?.sessionId);if(!owner)throw new Error('This tool belongs to PI-bot sessions only.');
       if(ctx.signal?.aborted||team.stopped)throw new Error('PI-bot is stopping.');
-      try{const result=await execute(args||{},owner,ctx);return typeof result==='string'?team.vault.redact(result):team.vault.clean(result);}catch(error){throw Error(team.vault.redact(error.message));}
+      const source=team.state.jobs.findLast(job=>job.sessionId===ctx.sessionId&&(!ctx.turnId||job.turnId===ctx.turnId));if(source?.cancelled)throw groupWork.stoppedError();
+      ctx={...ctx,...(owner.room?{groupEpoch:source?.groupEpoch??team.groupPlans?.get(owner.room.id)?.epoch??groupWork.epoch(owner.room)}:{})};if(owner.room)groupWork.assertCurrent(team,owner.room,ctx.groupEpoch);
+      try{privacy.guardTool(team,name,args||{},owner);const result=await execute(args||{},owner,ctx);return typeof result==='string'?team.vault.redact(result):team.vault.clean(result);}catch(error){throw Error(team.vault.redact(error.message));}
     }});names.push(name);
   }
   const find=name=>{const bots=team.state.bots.filter(b=>b.name===name||b.id===name);if(bots.length!==1)throw new Error('No unique Bot named '+name);return bots[0];};
   const visible=(owner,room)=>owner.bot.role==='Administrator'||room.members.includes(owner.bot.id);
   await register('show_view','Show a view card in your private chat: text, metric, table, progress, chart, local calculator, sandboxed static HTML, options, confirm or a short form. Interactive cards end your turn; answers arrive later as a new assignment. Keep the title and view under 8 KB. Never collect keys, tokens or passwords; use request_secret.',{title:field('Short card title'),view:{type:'object',additionalProperties:true,description:'A component {type,...props}. stack: children[1..16]; text: text; metric: label,value,tone? (good/warn/bad); table: columns[{key,label}],rows as arrays of cells; progress: percent[0..100],label?; options: id,options[{label,description?}],multi?; confirm: id,confirmLabel?,cancelLabel?; form: id,fields[{id,label,placeholder?}],submitLabel?. Also row/stack: children, let (named formula strings); chart: kind bar/hbar/line/area/donut, categories, series [{name,values}], unit?, caption?; slider/number: id,label,min,max,step,value; toggle: id,label,value; choice: id,label,options [{label,value}],value; submit: id,label; callout: text,tone; sources: items [{label,url}]; html: html,summary,height (static isolated display, no scripts/network). Formula values use {"=":"input_id * 2"}; local inputs alone do not await a reply; add submit for sending input values. Only declared props.'},await_reply:{type:'boolean',description:'Defaults to true for interactive cards and false for display-only cards.'}},['title','view'],async(args,owner,ctx)=>createView(team,args,owner,ctx),'medium');
-  await register('list_bots','List PI-bot members, their roles and current task statuses, and your visible groups.',{},[],async(_,owner)=>JSON.stringify({bots:team.state.bots.map(b=>({id:b.id,name:b.name,role:b.role,roleLabel:b.roleLabel,instructions:b.instructions,modelKey:b.modelKey,activity:team.handoffs.activity(b),status:team.state.jobs.filter(j=>j.botId===b.id&&team.active(j)).map(j=>({id:j.id,status:j.status,task:j.task.slice(0,250)}))})),groups:team.state.rooms.filter(r=>visible(owner,r)).map(r=>({id:r.id,name:r.name,notice:r.notice,members:r.members,adminId:r.adminId,executionMode:r.executionMode,replyMode:r.replyMode}))}));
+  await register('list_bots','List PI-bot members, their roles and current task statuses, and your visible groups. Private Bots are shown only to themselves; other Bots cannot inspect their details.',{},[],async(_,owner)=>JSON.stringify({bots:team.state.bots.filter(b=>!privacy.isPrivate(b)||b.id===owner.bot.id).map(b=>({id:b.id,name:b.name,role:b.role,roleLabel:b.roleLabel,...(b.id===owner.bot.id||!privacy.isPrivate(b)?{instructions:b.instructions,modelKey:b.modelKey,private:privacy.isPrivate(b)}:{private:true}),activity:team.handoffs.activity(b),status:team.state.jobs.filter(j=>j.botId===b.id&&team.active(j)).map(j=>({id:j.id,status:j.status,task:j.task.slice(0,250)}))})),groups:team.state.rooms.filter(r=>visible(owner,r)&&!r.members.some(id=>privacy.isPrivate(team.bot(id)))).map(r=>({id:r.id,name:r.name,notice:r.notice,members:r.members,adminId:r.adminId,executionMode:r.executionMode,replyMode:r.replyMode}))}));
   await register('list_models','List models configured and available in PI-Desktop and their thinking levels.',{},[],async()=>JSON.stringify(await team.models()));
+  await register('get_office_tools','Before working on Word (.docx), PowerPoint (.pptx) or Excel (.xlsx), get the bundled Office CLI, available Node runtime and usage guide. This only returns instructions; execute document operations through PI native tools with normal approval. No built-in render, PDF export or formula recalculation.',{},[],async()=>require('./office').officeTools());
   await register('message_bot','Send a self-contained message to another PI-bot. It queues after that member\'s current assignment. Do not wait in a loop. The response returns later, or goes to the user when reply_to=user. Generate a fresh request_id for each new task and reuse it only when retrying that same request. If the result is failed or interrupted, inspect the queue before retrying with a new ID.',{to:field('Exact Bot name'),message:field('Task, question or information'),reply_to:{type:'string',enum:['me','user']},when:{type:'string',enum:['now','queue']},request_id:field('Optional stable ID; reuse only for retries of the same request')},['to','message'],async(args,owner,ctx)=>{
     if(args.request_id!==undefined)return dispatchMessageBot(team,args,owner,ctx);
     const target=find(args.to);if(target.id===owner.bot.id)throw new Error('Cannot message yourself.');
@@ -77,11 +45,12 @@ async function installTools(team){
     const queued=team.state.jobs.find(j=>j.botId===target.id&&j.status==='queued'&&j.fromBotId===owner.bot.id&&j.roomId===owner.room?.id&&j.parentJobId===parent?.id);
     if(queued){queued.task+='\n\n'+content;await team.save();return JSON.stringify({accepted:true,merged:true,jobId:queued.id,activity});}
     await team.admitBotMessage();
-    const options={attachments:source?.attachments,referencesText:source?.referencesText,fromBotId:owner.bot.id,fromName:owner.bot.name,replyTo:args.reply_to==='user'?null:owner.bot.id,sourceSessionId:ctx.sessionId,replyRoomId:owner.room?.id,...(parent?{parentJobId:parent.id}:{})};
+    const options={attachments:source?.attachments,referencesText:source?.referencesText,fromBotId:owner.bot.id,fromName:owner.bot.name,replyTo:args.reply_to==='user'?null:owner.bot.id,sourceSessionId:ctx.sessionId,replyRoomId:owner.room?.id,...(owner.room?{groupEpoch:ctx.groupEpoch,replyGroupEpoch:ctx.groupEpoch}:{}),...(parent?{parentJobId:parent.id}:{})};
     let result;if(owner.room){if(target.id===owner.room.adminId||target.role==='Administrator')throw Error('该成员是群聊规划管理员，请在群聊中直接说明需要其汇总的内容。');const child=team.enqueue(owner.room,target,content,undefined,{...options,offRound:true});result={jobId:child.id};await team.save();}else result=await team.privateChat(target.id,content,options);
     if(parent&&result.jobId)team.handoffs.attach(source,team.state.jobs.find(j=>j.id===result.jobId));await team.save();
     return JSON.stringify({accepted:true,...result,activity,note:owner.room?'Work stays in this group. Results return here.':'End your turn after delegating; all child results return automatically before your final result is delivered upstream.'});
   },'medium');
+  await register('check_delegation','Read the saved status of a message_bot request sent by this Bot. This is not proof that outputs passed independent verification. Use on demand, never in a polling loop.',{request_id:field('The original request_id')},['request_id'],async(args,owner)=>JSON.stringify(delegationStatus(team,owner,args.request_id)));
   const historyFields={around:field('Exact message ID or unique text anchor; show surrounding messages'),query:field('Search text; all whitespace-separated words must match'),before:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}};
   function pickRoom(value,owner){
     const rooms=team.state.rooms.filter(r=>visible(owner,r));
@@ -100,7 +69,7 @@ async function installTools(team){
   await register('update_bot','Change your own display name, role label, color, instructions or settings. Only a PI-bot administrator can change another Bot. Working folders can change only while the target is idle; never changes a running session directory or permission role.',{bot:field('Exact Bot name; omit for yourself'),name:field('Display name'),role:field('Display role label'),instructions:field('Replacement instructions'),model:field('Existing PI model key'),color:field('Palette color name; empty string restores default'),work_dir:field('Existing absolute folder path, only when requested by user; empty string restores team workspace. Target must be idle.')},[],async(args,owner)=>{
     const target=args.bot?find(args.bot):owner.bot;if(target.id!==owner.bot.id&&owner.bot.role!=='Administrator')throw new Error('Only administrators can change another Bot.');
     if(args.color&&!(await import('../renderer/upstream/characters.mjs')).isColor(args.color))throw Error('头像颜色无效。');
-    await team.upsertBot({...target,name:args.name??target.name,roleLabel:args.role??target.roleLabel,instructions:args.instructions??target.instructions,modelKey:args.model??target.modelKey,...(args.color!==undefined?{color:args.color}:{}),...(args.work_dir!==undefined?{workDir:args.work_dir}:{})});return 'Updated '+target.name;
+    await team.upsertBot({...target,name:args.name??target.name,roleLabel:args.role??target.roleLabel,instructions:args.instructions??target.instructions,modelKey:args.model??target.modelKey,...(args.color!==undefined?{color:args.color}:{}),...(args.work_dir!==undefined?{workDir:args.work_dir}:{})},undefined,owner.bot);return 'Updated '+target.name;
   },'medium');
   await register('create_bot','Main administrator only: create a worker that inherits your model unless another is specified, receives its first background and greets the user.',{name:field('Distinct name'),role:field('Display role'),instructions:field('Responsibilities'),brief:field('Why the user wants this Bot; first context'),model:field('Existing PI model key, only when requested'),work_dir:field('Existing absolute folder path; only when requested by user')},['name','instructions'],async(args,owner)=>{if(owner.bot.role!=='Administrator')throw Error('Ask an administrator to create a Bot.');const bot=await createBotFrom(team,owner.bot,{name:args.name,roleLabel:args.role,instructions:args.instructions,modelKey:args.model,brief:args.brief,...(args.work_dir!==undefined?{workDir:args.work_dir}:{})});return 'Created '+bot.name+'; it will greet the user in its private chat.';},'medium');
   await register('create_group','Main administrator only: create a group; you join automatically as its administrator unless another is selected. Use post_to_group to start a discussion.',{members:{type:'array',items:{type:'string'},minItems:1,maxItems:100},name:field('Group name; defaults to members'),notice:field('Shared instructions'),admin:field('Bot name or ID; defaults to you'),mode:{type:'string',enum:['admin','everyone']},executionMode:{type:'string',enum:['serial','parallel']}},['members'],async(args,owner)=>{if(owner.bot.role!=='Administrator')throw Error('Only a main administrator can create groups.');const room=await createGroupFrom(team,owner.bot,{members:args.members.map(n=>find(n).id),name:args.name,notice:args.notice,adminId:args.admin?find(args.admin).id:undefined,replyMode:args.mode,executionMode:args.executionMode});return JSON.stringify({created:true,id:room.id,name:room.name,note:'Use post_to_group to start a discussion.'});},'medium');

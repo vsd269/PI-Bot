@@ -3,6 +3,7 @@ const path=require('node:path');
 const {randomUUID}=require('node:crypto');
 const {SkillImports,materialize}=require('./skill-import');
 const {StateEdit}=require('./state-edit');
+const privacy=require('./privacy');
 function expand(names,library){
   const result=new Set();
   for(const name of names||[]){const item=library[name];if(!item)throw new Error('能力不存在：'+name);if(item.kind==='pack')for(const child of item.items){if(!library[child]||library[child].kind==='pack')throw new Error('能力包引用了失效的能力：'+child);result.add(child);}else result.add(name);}
@@ -18,7 +19,9 @@ class Capabilities{
     const usedByOthers=this.team.state.bots.some(b=>b.id!==caller.id&&expand(b.capabilities||[],this.library).some(c=>c.name===item.name));
     if(item.createdBy!==caller.id||usedByOthers)throw new Error('只有创建者或管理员可修改此能力；被其他 Bot 使用时须由管理员修改。');
   }
-  async save(input,caller){
+  save(input,caller){return this.team.rosterChange(()=>this.saveItem(input,caller));}
+  async saveItem(input,caller){
+    if(privacy.isPrivate(caller))throw new Error('私密 Bot 不能自动保存共享能力；请由用户预览并确认经验提案，或手动添加。');
     const name=String(input.name||'').trim();if(!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(name)||name.length>32)throw new Error('能力名称须为最多 32 个小写字母、数字和单连字符。');
     if(!['skill','mcp','pack'].includes(input.kind))throw new Error('请选择 Skill、原生 MCP 引用或能力包。');
     const previous=this.library[name];if(previous){this.check(previous,caller);if(previous.kind!==input.kind)throw new Error('已有能力不可变更类型。');}
@@ -31,14 +34,15 @@ class Capabilities{
       const view=await this.team.connectors();if(!view.servers.some(s=>s.id===input.serverId))throw new Error('请选择已在 PI 中配置的 MCP 连接器。');item.serverId=input.serverId;
     }
     if(item.kind==='pack'){if(!Array.isArray(input.items))throw new Error('请选择能力包成员。');item.items=[...new Set(input.items)];for(const child of item.items)if(!this.library[child]||this.library[child].kind==='pack')throw new Error('能力包只能包含已保存的 Skill 和 MCP 引用。');}
-    this.library[name]=item;await this.team.save();return this.view();
+    const edit=new StateEdit();edit.set(this.library,name,item);await this.team.commitEdit(edit);return this.view();
   }
-  async remove(name,caller){const item=this.library[name];if(!item)throw new Error('能力不存在。');this.check(item,caller);delete this.library[name];for(const pack of Object.values(this.library))if(pack.kind==='pack')pack.items=pack.items.filter(n=>n!==name);for(const bot of this.team.state.bots)bot.capabilities=(bot.capabilities||[]).filter(n=>n!==name);await this.team.save();return this.view();}
+  remove(name,caller){return this.team.rosterChange(async()=>{const item=this.library[name];if(!item)throw new Error('能力不存在。');this.check(item,caller);const edit=new StateEdit();edit.delete(this.library,name);for(const pack of Object.values(this.library))if(pack.kind==='pack')edit.set(pack,'items',pack.items.filter(n=>n!==name));for(const bot of this.team.state.bots)edit.set(bot,'capabilities',(bot.capabilities||[]).filter(n=>n!==name));await this.team.commitEdit(edit);return this.view();});}
   attach(input,caller){return this.team.rosterChange(()=>this.assign(input,caller));}
   async assign(input,caller){
     const ids=input.botIds===undefined?[input.botId]:input.botIds;
     if(!Array.isArray(ids)||!ids.length||ids.length>this.team.state.bots.length||ids.some(id=>typeof id!=='string'||!id))throw Error('请至少选择一位现有 Bot。');
     const bots=[...new Set(ids)].map(id=>this.team.bot(id));
+    if(caller)for(const bot of bots)privacy.assertTarget(caller,bot,'能力设置');
     if(caller&&bots.some(bot=>caller.id!==bot.id&&caller.role!=='Administrator'))throw Error('只有管理员可修改其他 Bot 的能力。');
     if(!Array.isArray(input.names)||input.names.some(name=>typeof name!=='string'))throw Error('请选择能力。');
     const names=[...new Set(input.names)],mode=input.mode||'replace';

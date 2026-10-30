@@ -1,0 +1,10 @@
+{
+  "upstream": "https://github.com/Fei2411/DS-Bot",
+  "version": "DS Bot 0.2.4",
+  "source": "ds-bot/office.js",
+  "target": "src/vendor/office/office.mjs",
+  "license": "Apache-2.0; see repository LICENSE and NOTICE",
+  "sha256": "9a8a97c0ea189d9c742fc6e7e93cb7a3cb117ec885aad9c5896232a10d3b4dea",
+  "changes": "File extension only. Bundled source bytes preserved. GUIDE.md is adapted for PI native command permissions and independently detected Node runtime.",
+  "bundledDependencies": [{"name":"@xmldom/xmldom","version":"0.9.12","license":"MIT","notice":"LICENSE-xmldom","source":"https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.9.12.tgz"}]
+}

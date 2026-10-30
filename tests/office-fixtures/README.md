@@ -1,0 +1,1 @@
+The three small sample OOXML files are unchanged fixtures from the user-supplied DS Bot 0.2.4 archive, ds-bot/test/fixtures/office/. Source project: Fei2411 / DS Bot, Apache-2.0. See the root LICENSE and NOTICE. They contain synthetic sample content and are used only for local CLI regression tests; they are not bundled in the PI plugin.

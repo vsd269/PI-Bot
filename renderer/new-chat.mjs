@@ -40,7 +40,7 @@ export function createNewChat({host,trigger,getBots,avatar,openBot,openSettings,
     input.disabled=message.disabled=busy;
     options=[];
     if(!group&&!wanted){options.push({label:'新建 Bot',ico:'PlusIcon',run:startBot},{label:'新建群聊',ico:'PeopleIcon',run:()=>{group=true;cursor=0;draw();input.focus();}});}
-    for(const bot of bots().filter(bot=>bot.id!==admin&&!picked.includes(bot.id)&&(!wanted||[bot.name,bot.role].some(value=>String(value||'').toLowerCase().includes(wanted))))){options.push({label:bot.name,bot,hint:choosing?'设为管理员':group?'加入群聊':'',run:()=>pick(bot)});}
+    for(const bot of bots().filter(bot=>(!group||!bot.private)&&bot.id!==admin&&!picked.includes(bot.id)&&(!wanted||[bot.name,bot.role].some(value=>String(value||'').toLowerCase().includes(wanted))))){options.push({label:bot.name,bot,hint:choosing?'设为管理员':group?'加入群聊':'',run:()=>pick(bot)});}
     if(!group&&wanted&&!bots().some(bot=>bot.name.toLowerCase()===wanted))options.push({label:'新建 Bot “'+input.value.trim()+'”',ico:'PlusIcon',run:startBot});
     cursor=Math.max(0,Math.min(cursor,options.length-1));list.replaceChildren();
     if(!options.length)list.append(el('div','没有匹配的 Bot','bt-hint'));

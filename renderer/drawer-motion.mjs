@@ -1,5 +1,5 @@
 // Upstream bt-pane-in slide: 300ms, with the existing page view transitions.
-export function createDrawerMotion({panel,conversation,trigger,onClose}){
+export function createDrawerMotion({panel,conversation,trigger,onClose,onChange}){
   let opened=false,animation=null,revision=0,disposed=false;
   const reduce=matchMedia('(prefers-reduced-motion: reduce)');
   function set(next){
@@ -9,7 +9,7 @@ export function createDrawerMotion({panel,conversation,trigger,onClose}){
     const from=wasHidden?'translateX(100%)':getComputedStyle(panel).transform;
     animation?.cancel();opened=next;
     trigger.setAttribute('aria-expanded',String(next));
-    conversation.toggleAttribute('data-details-open',next);
+    conversation.toggleAttribute('data-details-open',next);onChange?.(next);
     panel.hidden=false;panel.inert=!next;panel.setAttribute('aria-hidden',String(!next));
     panel.style.transform=next?'translateX(0)':'translateX(100%)';
     if(!next){onClose?.();if(panel.contains(panel.getRootNode().activeElement))trigger.focus();}

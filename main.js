@@ -59,12 +59,15 @@ async function onPanelInvoke(channel,input={}){
     case 'team.bot.save': return team.upsertBot(input);
     case 'team.bot.appearance': return team.setAppearance(input);
     case 'team.avatar.library': return team.avatars.operation(input);
+    case 'team.learning': return team.learning.operation(input);
+    case 'team.office': return require('./src/office').officeTools({refresh:true});
     case 'team.memory.view': return team.memory.endpoint('memory-view',{botId:input.botId,roomId:input.roomId,summarize:input.summarize===true,regenerate:input.regenerate===true});
     case 'team.memory.add': return team.memory.add(input);
     case 'team.memory.forget': return team.memory.endpoint('memory-forget',input);
     case 'team.memory.ask': return team.memory.endpoint('memory-ask',input);
     case 'team.room.save': return team.upsertRoom(input);
     case 'team.group.send': return team.submitMessage('room',input.roomId,input.content,team.sendOptions(input));
+    case 'team.group.stop': return require('./src/group-stop').stop(team,input.roomId);
     case 'team.group.continue': return require('./src/group-relay').resume(team,team.room(input.roomId));
     case 'team.btw.start': return require('./src/asides').ask(team,input);
     case 'team.btw.action': return require('./src/asides').operate(team,input);
@@ -122,7 +125,7 @@ function onRendererCall(method,args={}){
   if(method==='mode.request'){const open=openRequested;openRequested=false;return {open};}
   if(method==='request.start'){
     if(args.channel==='team.bootstrap')return beginRequest(args);
-    if(!['team.updates','team.startup','team.microphone','team.file.open','team.attachment.upload','team.plugins','team.github','team.bot.main','team.skill.import','team.extensions','team.browser','team.speech','team.mcp.login','team.secret.transfer','team.attachment.preview','team.mcp.save','team.mcp.delete','team.mcp.tools','team.secrets','team.secret.set','team.secret.get','team.secret.delete','team.secret.export','team.secret.import','team.recovery','team.bot.preview','team.bot.permission','team.theme','team.backup','team.bot.patch','team.room.patch','team.bot.appearance','team.avatar.library','team.bootstrap','team.state','team.models','team.workspaces','team.appearance','team.bot.save','team.memory.view','team.memory.add','team.memory.forget','team.memory.ask','team.room.save','team.group.send','team.group.continue','team.btw.start','team.btw.action','team.secret.purpose','team.private.send','team.job.cancel','team.session.open','team.bot.delete','team.bot.duplicate','team.room.delete','team.history.search','team.transcript','team.pin','team.react','team.prefs','team.question.answer','team.view.answer','team.usage','team.connectors','team.schedules','team.schedule.save','team.schedule.toggle','team.schedule.delete','team.capabilities','team.capability.save','team.capability.delete','team.capability.attach'].includes(args.channel))throw new Error('Unknown PI-bot operation.');
+    if(!['team.updates','team.startup','team.microphone','team.file.open','team.attachment.upload','team.plugins','team.github','team.bot.main','team.skill.import','team.extensions','team.browser','team.speech','team.mcp.login','team.secret.transfer','team.attachment.preview','team.mcp.save','team.mcp.delete','team.mcp.tools','team.secrets','team.secret.set','team.secret.get','team.secret.delete','team.secret.export','team.secret.import','team.recovery','team.bot.preview','team.bot.permission','team.theme','team.backup','team.bot.patch','team.room.patch','team.bot.appearance','team.avatar.library','team.bootstrap','team.state','team.models','team.workspaces','team.appearance','team.bot.save','team.memory.view','team.memory.add','team.memory.forget','team.memory.ask','team.room.save','team.group.send','team.group.stop','team.group.continue','team.learning','team.office','team.btw.start','team.btw.action','team.secret.purpose','team.private.send','team.job.cancel','team.session.open','team.bot.delete','team.bot.duplicate','team.room.delete','team.history.search','team.transcript','team.pin','team.react','team.prefs','team.question.answer','team.view.answer','team.usage','team.connectors','team.schedules','team.schedule.save','team.schedule.toggle','team.schedule.delete','team.capabilities','team.capability.save','team.capability.delete','team.capability.attach'].includes(args.channel))throw new Error('Unknown PI-bot operation.');
     return beginRequest(args);
   }
   if(method==='request.read'){

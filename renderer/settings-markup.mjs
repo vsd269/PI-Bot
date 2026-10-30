@@ -14,6 +14,7 @@ export const botSettingsMarkup=`<dialog id="bot-dialog"><form id="bot-form"><div
   ${card('个人资料',row('名称',input('bot-name','名称','required maxlength="200"'))+row('标签',input('bot-role-label','职责标签','maxlength="200" placeholder="研究、管理…"'),'可选，显示在名称下方。'))}
   ${card('模型',row('模型','<select id="bot-model" class="bt-bs-input" aria-label="模型"></select>')+row('思考强度','<select id="bot-thinking" class="bt-bs-input" aria-label="思考强度"><option value="off">关闭</option></select>'))}
   ${card('工作文件夹',folder('bot','工作目录'))}
+  ${card('隐私',toggle('bot-private','私密 Bot','阻止其他 Bot 通过 PI Bot 工具读取它的聊天和记忆；不能加入群聊或自动共享内容。请先设置独立工作目录。这是插件层隔离，PI Desktop 原生文件、命令和 MCP 工具仍由宿主权限控制。'),'bot-privacy-section')}
   ${card('指令',row('这个 Bot 做什么',area('bot-instructions','职责与操作要求','maxlength="16000" placeholder="这个 Bot 在团队中负责什么…"'),'它在团队中的职责，会作为系统提示的一部分。',true))}
   ${card('能力',link('bot-capabilities','能力配置','为这个 Bot 分配 Skill 与能力包。')+link('bot-mcp','MCP 授权','独立授权本地连接器和工具。')+link('bot-secrets','密钥管理','加密保存此 Bot 的凭据，支持加密迁移。'),'bot-abilities-section')}
   ${card('记忆',link('memory-open','长期记忆','<span id="memory-count">管理记忆条目</span>'),'bot-memory-section')}

@@ -8,6 +8,9 @@ const {endpoint}=require('./net');
 const {validateBundle}=require('./skill-import');
 const {validateRecords}=require('./views');
 const {validateLibrary}=require('./avatar-library');
+const {validatePrivateState}=require('./privacy');
+const {validateRequests}=require('./message-requests');
+const {validateLog}=require('./execution-log');
 const {ID,LEGACY_ID,backupRoot}=require('./identity');
 const MAX_BYTES=32*1024*1024;
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -28,6 +31,7 @@ function validateState(state){
   }
   for(const key of ['schedules','questions','completions','archives'])if(state[key]!==undefined&&(!Array.isArray(state[key])||state[key].some(v=>!v||typeof v!=='object'||Array.isArray(v))))throw Error('备份中的任务或记录无效。');
   if(state.views!==undefined)validateRecords(state.views,state.bots);
+  validateRequests(state);validateLog(state.executionLog);validatePrivateState(state);require('./learning').validateLearning(state);
   require('./asides').validateAsides(state);
   for(const room of state.rooms)require('./group-relay').validateRelays(room,state.bots);
   if(state.jobs.some(v=>!v||typeof v!=='object'||Array.isArray(v)))throw Error('备份中的任务记录无效。');

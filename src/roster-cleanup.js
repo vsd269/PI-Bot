@@ -9,6 +9,8 @@ function cleanupRoster(state,edit=new StateEdit()){
   edit.remove(state,'secretRequests',request=>!ids.has(request.botId));
   edit.remove(state,'asides',aside=>!ids.has(aside.botId));
   edit.remove(state,'views',view=>!ids.has(view.botId)||Boolean(view.roomId));
+  if(state.learning?.proposals)edit.remove(state.learning,'proposals',proposal=>!ids.has(proposal.botId));
+  if(state.learning?.reviews&&typeof state.learning.reviews==='object')for(const id of Object.keys(state.learning.reviews))if(!ids.has(id))edit.delete(state.learning.reviews,id);
   const config=state.integrations;
   if(config&&typeof config==='object'){
     if(config.speech&&typeof config.speech==='object')for(const id of Object.keys(config.speech))if(!ids.has(id))edit.delete(config.speech,id);

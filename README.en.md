@@ -4,6 +4,14 @@ Persistent Bot teams for **PI Desktop**. [简体中文](README.md)
 
 PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DS Bot distribution, and it does not claim complete feature parity.
 
+## New in 0.3.89
+
+This cumulative release includes the 0.3.87–0.3.89 changes: durable acknowledgement of request-ID worker delegations, bounded execution history, group-wide stop, user-approved Skill and AGENTS.md proposals, responsive resizable sidebars, lightweight Office tools, and plugin-level private Bots.
+
+Private Bots require a separate folder and cannot join groups. They restrict PI Bot-owned tools and memory scopes; native PI filesystem, shell, MCP and child-session isolation is not verified, and this is not an OS sandbox. Office tools require a standalone Node.js 20+ runtime. Automatic experience review is off by default and uses the configured model when enabled.
+
+Local regression: 237 passed, 1 skipped due to Windows symlink permissions, 0 failed. Real-host/model acceptance is not covered by these automated tests. See the [cumulative release notes](docs/GITHUB-RELEASE-0.3.89.md) and [privacy guide](docs/RELEASE-0.3.89.md).
+
 ## New in 0.3.86
 
 Adds a shared avatar library, `/side` as an alias for `/btw`, deletion of completed side questions, unread Bot-to-Bot queue indicators, and `message_bot` request ID deduplication. See the [0.3.86 release notes](docs/RELEASE-0.3.86.md) for entry points and limits.

@@ -501,8 +501,10 @@ export function install(rt) {
     await rename(temp, path)
   }
   async function journal(record) {
-    await mkdir(root, { recursive: true })
-    await appendFile(journalPath, `${JSON.stringify({ time: new Date().toISOString(), ...record })}\n`, 'utf8')
+    const botId = record.scope?.startsWith('bot:') ? record.scope.slice(4) : record.actor
+    const target = rt.isPrivate?.(botId) ? join(root, 'private-journals', safeId(botId), 'journal.jsonl') : journalPath
+    await mkdir(dirname(target), { recursive: true })
+    await appendFile(target, `${JSON.stringify({ time: new Date().toISOString(), ...record })}\n`, 'utf8')
   }
   let writing = Promise.resolve()
   const queued = (job) => {
@@ -546,9 +548,12 @@ export function install(rt) {
     if (/^(team|团队|共享)$/i.test(value)) return { scope: TEAM }
     const bot = rt.findBot(value)
     if (bot === undefined) return { error: `No Bot named ${value}. scope is "own", ${roomId === undefined ? '' : '"group", '}"team", or a Bot's name.` }
+    if (rt.isPrivate?.(bot.id) && bot.id !== botId) return { error: `只能读取自己的记忆；${bot.name} 是私密 Bot。` }
     return { scope: ownScope(bot.id) }
   }
   function writeDenied(scope, botId) {
+    if (scope.kind === 'bot' && scope.botId !== botId && rt.isPrivate?.(scope.botId)) return '其他 Bot 不能修改私密 Bot 的记忆。'
+    if (rt.isPrivate?.(botId) && scope.kind !== 'bot') return '私密 Bot 不能把记忆写入团队或群聊共享空间。'
     if (scope.kind === 'team') return writesTeam(botId) ? undefined : 'Only Main Bots and group admins write the team memory. Tell a Main Bot with message_bot what the team should know.'
     if (scope.kind === 'group') return rt.roomOf(scope.roomId)?.members.includes(botId) ? undefined : 'Only the members of a group chat write its memory.'
     if (scope.botId !== botId && !rt.isMain(botId)) return 'Only a Main Bot can change another Bot\'s memory. Use message_bot to tell that Bot instead.'
@@ -955,6 +960,7 @@ export function install(rt) {
     const { scope, error } = namedScope(raw, botId, roomId)
     if (error) return { error }
     if (scope === undefined) return { scopes: roomId === undefined ? [ownScope(botId), TEAM] : [ownScope(botId), groupScope(roomId), TEAM] }
+    if (scope.kind === 'bot' && scope.botId !== botId && rt.isPrivate?.(scope.botId) && !rt.canReadBot?.(botId,scope.botId)) return { error: '只能读取自己的记忆；该 Bot 是私密 Bot。' }
     if (scope.kind === 'bot' && scope.botId !== botId && !rt.isMain(botId)) return { error: 'Only a Main Bot can read another Bot\'s memory. Ask that Bot with message_bot instead.' }
     return { scopes: [scope] }
   }

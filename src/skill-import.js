@@ -75,7 +75,8 @@ class SkillImports{
     }
     throw Error('未知 Skill 导入操作。');
   }
-  async commit(upload,input){
+  commit(upload,input){return this.team.rosterChange(()=>this.commitItems(upload,input));}
+  async commitItems(upload,input){
     if(!upload.items)throw Error('请先解析并检查 Skill。');const lib=this.capabilities.library,used=new Set(Object.keys(lib)),items=structuredClone(upload.items);for(const item of items)item.name=unique(item.name,used);
     if(input.createPack===true){const name=unique(slug(input.packName||upload.name.replace(/\.(?:zip|skill)$/i,''),'local-pack'),used);items.push({name,kind:'pack',description:'从本地安装包导入的能力组合',items:items.map(i=>i.name),createdBy:null});}
     const resources=[...Object.values(lib),...items].reduce((sum,i)=>sum+(i.bundle?i.bundle.files.reduce((n,f)=>n+Buffer.byteLength(f.data,'base64'),0):0),0);if(resources>12*1024*1024)throw Error('能力库导入资源总大小限 12 MB，请移除不需要的 Skill 后重试。');

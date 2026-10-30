@@ -1,6 +1,7 @@
 'use strict';
 const {randomUUID}=require('node:crypto');
 async function createBotFrom(team,creator,input){
+  if(input.private!==undefined)throw Error('只有用户可以在 Bot 设置中修改私密状态。');
   const brief=String(input.brief||'').trim();if(brief.length>8000)throw Error('首次背景最多 8000 字符。');
   const models=await team.models();
   const modelKey=input.modelKey||models.find(m=>m.key===creator.modelKey)?.key||models.find(m=>m.isDefault)?.key||models[0]?.key||'';
