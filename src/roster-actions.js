@@ -1,5 +1,6 @@
 'use strict';
 const {randomUUID}=require('node:crypto');
+const {admit}=require('./work-admission');
 async function createBotFrom(team,creator,input){
   if(input.private!==undefined)throw Error('只有用户可以在 Bot 设置中修改私密状态。');
   const brief=String(input.brief||'').trim();if(brief.length>8000)throw Error('首次背景最多 8000 字符。');
@@ -12,8 +13,8 @@ async function createBotFrom(team,creator,input){
 async function deliverKickoffs(team,models){
   return team.rosterChange(async()=>{if(team.stopped)return;if(!team.state.bots.some(b=>b.kickoff))return;models??=await team.models();if(!models.length)return;
   for(const bot of team.state.bots){const kickoff=bot.kickoff;if(!kickoff||bot.role==='Administrator'||bot.modelKey&&!models.some(m=>m.key===bot.modelKey))continue;const source='kickoff-'+bot.id;
-    if(!team.state.jobs.some(j=>j.deliverySourceId===source))team.enqueue(null,bot,kickoff.text,undefined,{fromBotId:kickoff.fromBotId,fromName:kickoff.fromName,creationGreeting:true,deliverySourceId:source});
-    await team.save();delete bot.kickoff;await team.save();
+    if(!team.state.jobs.some(j=>j.deliverySourceId===source))await admit(team,{bot,task:kickoff.text,key:'kickoff:'+bot.id,options:{fromBotId:kickoff.fromBotId,fromName:kickoff.fromName,creationGreeting:true,deliverySourceId:source},change:(edit)=>edit.delete(bot,'kickoff')});
+    else {delete bot.kickoff;await team.save();}
   }
   });
 }

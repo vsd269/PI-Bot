@@ -1,5 +1,7 @@
 'use strict';
 const {randomUUID}=require('node:crypto');
+const {admit}=require('./work-admission');
+const groupWork=require('./group-stop');
 function normalizeQuestion(args){
   const text=String(args.question||'').trim();if(!text||text.length>4000)throw Error('Question must have 1–4000 characters.');
   const rich=Array.isArray(args.options);
@@ -8,7 +10,8 @@ function normalizeQuestion(args){
   return {text,options,choices:options.map(o=>o.label),detail:String(args.detail||'').trim().slice(0,4000),multiSelect:args.multiSelect===true,allowCustom:rich?args.allowCustom===true:true};
 }
 async function createQuestion(team,args,owner,ctx){
-  const question={id:randomUUID(),botId:owner.bot.id,roomId:owner.room?.id,sessionId:ctx.sessionId,...normalizeQuestion(args),status:'pending',at:new Date().toISOString()};
+  const source=team.state.jobs.findLast(j=>j.sessionId===ctx.sessionId&&(!ctx.turnId||j.turnId===ctx.turnId)&&team.active(j));
+  const question={id:randomUUID(),botId:owner.bot.id,roomId:owner.room?.id,...(owner.room?{groupEpoch:ctx.groupEpoch??groupWork.epoch(owner.room)}:{}),sessionId:ctx.sessionId,...(source?{sourceJobId:source.id}:{}),...normalizeQuestion(args),status:'pending',at:new Date().toISOString()};
   team.state.questions.push(question);try{await team.save();}catch(error){team.state.questions=team.state.questions.filter(q=>q!==question);throw error;}
   return JSON.stringify({id:question.id,status:'waiting_for_user',note:'The answer arrives later as a new assignment. Continue independent work or end your turn; do not repeatedly ask.'});
 }
@@ -27,9 +30,13 @@ async function deliverQuestion(team,question){
   if(!question.deliveryPending||team.stopped)return;
   const bot=team.bot(question.botId),room=question.roomId?team.room(question.roomId):null;
   if(room&&!room.members.includes(bot.id))throw Error('提问成员已离开原群聊，未向其他聊天转发回答。');
+  if(room)groupWork.assertCurrent(team,room,question.groupEpoch??0);
   const source='question-'+question.id,text='User answer to '+question.text+'\n'+question.answer;
-  if(bot.role==='Administrator'||room?.adminId===bot.id)await team.submitMessage(room?'room':'bot',room?.id||bot.id,text,{clientMessageId:source});
-  else if(!team.state.jobs.some(j=>j.deliverySourceId===source))team.enqueue(room,bot,text,undefined,{deliverySourceId:source,offRound:Boolean(room)});
+  if(bot.role==='Administrator'||room?.adminId===bot.id)await team.submitMessage(room?'room':'bot',room?.id||bot.id,text,{clientMessageId:source,...(room?{groupEpoch:question.groupEpoch??0}:{})});
+  else if(!team.state.jobs.some(j=>j.deliverySourceId===source)){
+    const origin=team.state.jobs.find(j=>j.id===question.sourceJobId),batch=(team.state.workBatches||[]).find(b=>b.roomId===room?.id&&b.status==='running'&&b.jobIds.includes(origin?.id));
+    await admit(team,{room,bot,task:text,roundId:origin?.roundId,key:'question:'+question.id,options:{deliverySourceId:source,offRound:Boolean(room),...(room?{groupEpoch:question.groupEpoch??0}:{})},change:(edit,job)=>{edit.set(question,'deliveryJobId',job.id);if(batch)edit.append(batch,'jobIds',job.id);}});
+  }
   await team.save();question.deliveryPending=false;delete question.deliveryError;await team.save();
 }
 async function answerQuestion(team,input){

@@ -10,6 +10,7 @@ const {pageLines}=require('./coordination');
 const {expand}=require('./capabilities');
 const {resourcePath}=require('./skill-import');
 const privacy=require('./privacy');
+const {randomUUID}=require('node:crypto');
 // Legacy export only; handoffs use dependency ancestry rather than a hop limit.
 const MAX_HOPS=4;
 function ownerOf(team,sessionId){
@@ -29,7 +30,7 @@ async function installTools(team){
       try{privacy.guardTool(team,name,args||{},owner);const result=await execute(args||{},owner,ctx);return typeof result==='string'?team.vault.redact(result):team.vault.clean(result);}catch(error){throw Error(team.vault.redact(error.message));}
     }});names.push(name);
   }
-  const find=name=>{const bots=team.state.bots.filter(b=>b.name===name||b.id===name);if(bots.length!==1)throw new Error('No unique Bot named '+name);return bots[0];};
+  const find=name=>require('./bot-reference').findBot(team,name);
   const visible=(owner,room)=>owner.bot.role==='Administrator'||room.members.includes(owner.bot.id);
   await register('show_view','Show a view card in your private chat: text, metric, table, progress, chart, local calculator, sandboxed static HTML, options, confirm or a short form. Interactive cards end your turn; answers arrive later as a new assignment. Keep the title and view under 8 KB. Never collect keys, tokens or passwords; use request_secret.',{title:field('Short card title'),view:{type:'object',additionalProperties:true,description:'A component {type,...props}. stack: children[1..16]; text: text; metric: label,value,tone? (good/warn/bad); table: columns[{key,label}],rows as arrays of cells; progress: percent[0..100],label?; options: id,options[{label,description?}],multi?; confirm: id,confirmLabel?,cancelLabel?; form: id,fields[{id,label,placeholder?}],submitLabel?. Also row/stack: children, let (named formula strings); chart: kind bar/hbar/line/area/donut, categories, series [{name,values}], unit?, caption?; slider/number: id,label,min,max,step,value; toggle: id,label,value; choice: id,label,options [{label,value}],value; submit: id,label; callout: text,tone; sources: items [{label,url}]; html: html,summary,height (static isolated display, no scripts/network). Formula values use {"=":"input_id * 2"}; local inputs alone do not await a reply; add submit for sending input values. Only declared props.'},await_reply:{type:'boolean',description:'Defaults to true for interactive cards and false for display-only cards.'}},['title','view'],async(args,owner,ctx)=>createView(team,args,owner,ctx),'medium');
   await register('list_bots','List PI-bot members, their roles and current task statuses, and your visible groups. Private Bots are shown only to themselves; other Bots cannot inspect their details.',{},[],async(_,owner)=>JSON.stringify({bots:team.state.bots.filter(b=>!privacy.isPrivate(b)||b.id===owner.bot.id).map(b=>({id:b.id,name:b.name,role:b.role,roleLabel:b.roleLabel,...(b.id===owner.bot.id||!privacy.isPrivate(b)?{instructions:b.instructions,modelKey:b.modelKey,private:privacy.isPrivate(b)}:{private:true}),activity:team.handoffs.activity(b),status:team.state.jobs.filter(j=>j.botId===b.id&&team.active(j)).map(j=>({id:j.id,status:j.status,task:j.task.slice(0,250)}))})),groups:team.state.rooms.filter(r=>visible(owner,r)&&!r.members.some(id=>privacy.isPrivate(team.bot(id)))).map(r=>({id:r.id,name:r.name,notice:r.notice,members:r.members,adminId:r.adminId,executionMode:r.executionMode,replyMode:r.replyMode}))}));
@@ -37,18 +38,9 @@ async function installTools(team){
   await register('get_office_tools','Before working on Word (.docx), PowerPoint (.pptx) or Excel (.xlsx), get the bundled Office CLI, available Node runtime and usage guide. This only returns instructions; execute document operations through PI native tools with normal approval. No built-in render, PDF export or formula recalculation.',{},[],async()=>require('./office').officeTools());
   await register('message_bot','Send a self-contained message to another PI-bot. It queues after that member\'s current assignment. Do not wait in a loop. The response returns later, or goes to the user when reply_to=user. Generate a fresh request_id for each new task and reuse it only when retrying that same request. If the result is failed or interrupted, inspect the queue before retrying with a new ID.',{to:field('Exact Bot name'),message:field('Task, question or information'),reply_to:{type:'string',enum:['me','user']},when:{type:'string',enum:['now','queue']},request_id:field('Optional stable ID; reuse only for retries of the same request')},['to','message'],async(args,owner,ctx)=>{
     if(args.request_id!==undefined)return dispatchMessageBot(team,args,owner,ctx);
-    const target=find(args.to);if(target.id===owner.bot.id)throw new Error('Cannot message yourself.');
-    const source=team.state.jobs.findLast(j=>j.sessionId===ctx.sessionId&&(!ctx.turnId||j.turnId===ctx.turnId)&&team.active(j));
-    const content=String(args.message||'').trim();if(!content||content.length>1000000)throw Error('Message must have 1–1000000 characters.');
-    team.handoffs.check(source,target.id);if(owner.room&&!owner.room.members.includes(target.id))throw Error('群聊中的任务只能交给本群成员，请先把该 Bot 加入群聊。');
-    const activity=team.handoffs.activity(target),parent=!owner.room&&args.reply_to!=='user'?team.handoffs.root(source):null;
-    const queued=team.state.jobs.find(j=>j.botId===target.id&&j.status==='queued'&&j.fromBotId===owner.bot.id&&j.roomId===owner.room?.id&&j.parentJobId===parent?.id);
-    if(queued){queued.task+='\n\n'+content;await team.save();return JSON.stringify({accepted:true,merged:true,jobId:queued.id,activity});}
-    await team.admitBotMessage();
-    const options={attachments:source?.attachments,referencesText:source?.referencesText,fromBotId:owner.bot.id,fromName:owner.bot.name,replyTo:args.reply_to==='user'?null:owner.bot.id,sourceSessionId:ctx.sessionId,replyRoomId:owner.room?.id,...(owner.room?{groupEpoch:ctx.groupEpoch,replyGroupEpoch:ctx.groupEpoch}:{}),...(parent?{parentJobId:parent.id}:{})};
-    let result;if(owner.room){if(target.id===owner.room.adminId||target.role==='Administrator')throw Error('该成员是群聊规划管理员，请在群聊中直接说明需要其汇总的内容。');const child=team.enqueue(owner.room,target,content,undefined,{...options,offRound:true});result={jobId:child.id};await team.save();}else result=await team.privateChat(target.id,content,options);
-    if(parent&&result.jobId)team.handoffs.attach(source,team.state.jobs.find(j=>j.id===result.jobId));await team.save();
-    return JSON.stringify({accepted:true,...result,activity,note:owner.room?'Work stays in this group. Results return here.':'End your turn after delegating; all child results return automatically before your final result is delivered upstream.'});
+    // Older callers receive an internal receipt too. Separate calls without a
+    // stable request_id are distinct requests, not cross-call idempotency.
+    return dispatchMessageBot(team,{...args,request_id:'legacy-'+randomUUID()},owner,ctx);
   },'medium');
   await register('check_delegation','Read the saved status of a message_bot request sent by this Bot. This is not proof that outputs passed independent verification. Use on demand, never in a polling loop.',{request_id:field('The original request_id')},['request_id'],async(args,owner)=>JSON.stringify(delegationStatus(team,owner,args.request_id)));
   const historyFields={around:field('Exact message ID or unique text anchor; show surrounding messages'),query:field('Search text; all whitespace-separated words must match'),before:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}};

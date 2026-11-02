@@ -21,14 +21,30 @@ test('unreadable memory directory is not treated as an empty topic list',async c
   const t=await fixture(ctx),dir=path.join(t.data,'memory/bots/a');await fs.mkdir(path.dirname(dir),{recursive:true});await fs.writeFile(dir,'original bytes');t.memory=await createMemoryAdapter(t,{review:false});
   await assert.rejects(()=>t.memory.view('a'),/无法读取/);assert.equal(await fs.readFile(dir,'utf8'),'original bytes');assert(t.memory.section(t.bot('a'),'native-a'));
 });
-test('each group has a member-based default limit and independently preserves overflow',async ctx=>{
-  const t=await fixture(ctx),room=t.room('room');assert.equal(relay.limitOf(room),12);room.relayLimit=1;
-  const job=source(t,'@Bravo 和 @Charlie 请检查');await t.delegateMentions(room,job);assert.equal(room.relayCount,1);assert.equal(room.pausedRelays.length,1);assert(room.log.some(l=>l.text.includes('暂停')));
+test('normal group work passes 18 relays and ignores legacy fixed caps',async ctx=>{
+  const t=await fixture(ctx),room=t.room('room');room.relayLimit=1;
+  for(let n=1;n<=22;n++)await t.delegateMentions(room,source(t,'@Bravo 请检查新的步骤 '+n));
+  assert.equal(room.relayCount,22);assert.equal(room.pausedRelays.length,0);assert.equal(room.log.some(l=>l.text.includes('暂停')),false);
+});
+test('idle acknowledgements park pending calls durably until user continuation',async ctx=>{
+  const t=await fixture(ctx),room=t.room('room');room.relayGuard={idle:relay.IDLE_RELAY_LIMIT-1,recent:[]};
+  await t.delegateMentions(room,source(t,'@Bravo 收到'));assert.equal(room.pausedRelays.length,1);assert(room.log.some(l=>l.text.includes('暂停')));
   const disk=JSON.parse(await fs.readFile(t.file,'utf8'));assert.equal(disk.rooms[0].pausedRelays.length,1);validateState(disk);
   await relay.resume(t,room);assert.equal(room.pausedRelays.length,0);const count=t.state.jobs.length;await relay.resume(t,room);assert.equal(t.state.jobs.length,count);
 });
-test('cycle protection keeps the blocked call for explicit user continuation',async ctx=>{
-  const t=await fixture(ctx),room=t.room('room');await t.delegateMentions(room,source(t,'@Bravo 请继续'));const child=t.state.jobs.find(j=>j.relayKey);child.result='@Alpha 请核对';await t.delegateMentions(room,child);assert.equal(room.pausedRelays.length,1);assert(room.pausedRelays[0].blocked);await relay.resume(t,room);assert.equal(room.pausedRelays.length,0);assert(t.state.jobs.some(j=>j.botId==='a'&&j.relayKey));
+test('returning real work to the original Bot is not treated as an idle loop',async ctx=>{
+  const t=await fixture(ctx),room=t.room('room');await t.delegateMentions(room,source(t,'@Bravo 请检查报告'));const child=t.state.jobs.find(j=>j.relayKey);child.result='@Alpha 已发现缺少第二节，请补充';await t.delegateMentions(room,child);assert.equal(room.pausedRelays.length,0);assert(t.state.jobs.some(j=>j.botId==='a'&&j.relayKey));
+});
+test('six consecutive empty handoffs pause but a real tool call resets the guard',async ctx=>{
+  const t=await fixture(ctx),room=t.room('room');
+  for(let n=0;n<6;n++)await t.delegateMentions(room,source(t,n%2?'@Alpha 谢谢':'@Bravo 收到',{botId:n%2?'b':'a'}));
+  assert.equal(room.pausedRelays.length,1);assert.equal(room.relayGuard.idle,6);await relay.resume(t,room);assert.equal(room.pausedRelays.length,0);
+  for(let n=0;n<5;n++)await t.delegateMentions(room,source(t,'@Bravo 收到'));
+  await t.delegateMentions(room,source(t,'@Bravo 收到',{toolCalls:1}));assert.equal(room.relayGuard.idle,0);assert.equal(room.pausedRelays.length,0);
+});
+test('repeated non-ack replies without tools also pause and malformed guard evidence is rejected',async ctx=>{
+  const t=await fixture(ctx),room=t.room('room');for(let n=0;n<7;n++)await t.delegateMentions(room,source(t,'@Bravo 请再次检查同一份报告的第二节'));
+  assert.equal(room.pausedRelays.length,1);assert.equal(room.relayGuard.idle,6);validateState(t.state);room.relayGuard.recent[0].digest='invalid';assert.throws(()=>validateState(t.state),/空转保护/);
 });
 test('concurrent duplicate delegation enqueues once and keeps source attachments',async ctx=>{
   const t=await fixture(ctx),room=t.room('room'),job=source(t,'@Bravo 请查看',{attachments:[{path:path.join(t.data,'file.txt')}],referencesText:'reference'});await Promise.all([t.delegateMentions(room,job),t.delegateMentions(room,job)]);const children=t.state.jobs.filter(j=>j.relayKey);assert.equal(children.length,1);assert.deepEqual(children[0].attachments,job.attachments);assert.equal(children[0].referencesText,'reference');
@@ -38,7 +54,7 @@ test('queued relay never executes before admission is durable; failure restores 
   const run=t.delegateMentions(room,source(t,'@Bravo 请检查')),failure=assert.rejects(run,/DISK_FAILURE/);while(calls<2)await new Promise(r=>setTimeout(r,1));blocked.resolve();await failure;assert.equal(room.pausedRelays.length,1);assert.equal(t.state.jobs.filter(j=>j.relayKey).length,0);assert.equal(t.executed.length,0);t.save=save;await relay.resume(t,room);assert.equal(room.pausedRelays.length,0);
 });
 test('another user message resumes saved relays and still coordinates the new request',async ctx=>{
-  const t=await fixture(ctx),room=t.room('room');room.relayLimit=1;await t.delegateMentions(room,source(t,'@Bravo @Charlie 继续'));let coordinated='';t.coordinate=async(_room,text)=>{coordinated=text;};await t.sendGroup(room.id,'继续并检查结果',{clientMessageId:'human'});await t.roomChains.get(room.id);assert.equal(room.pausedRelays.length,0);assert.equal(coordinated,'继续并检查结果');
+  const t=await fixture(ctx),room=t.room('room');room.relayGuard={idle:5,recent:[]};await t.delegateMentions(room,source(t,'@Bravo @Charlie 收到'));let coordinated='';t.coordinate=async(_room,text)=>{coordinated=text;};await t.sendGroup(room.id,'继续并检查结果',{clientMessageId:'human'});await t.roomChains.get(room.id);assert.equal(room.pausedRelays.length,0);assert.equal(coordinated,'继续并检查结果');assert.equal(room.relayGuard,undefined);
 });
 test('restored relay options cannot overwrite target Bot, group, job ID or safety flags',async ctx=>{
   const t=await fixture(ctx),room=t.room('room');room.pausedRelays=[{id:'p',key:'k',botId:'b',sourceJobId:'s',task:'检查',options:{botId:'chief',roomId:'evil',id:'evil',isHandoffReply:true,fromBotId:'a'}}];await relay.resume(t,room);const job=t.state.jobs[0];assert.equal(job.botId,'b');assert.equal(job.roomId,room.id);assert.notEqual(job.id,'evil');assert.equal(job.isHandoffReply,undefined);
@@ -96,7 +112,7 @@ test('backup avatar-library rename failure rolls back memory and retries restore
   ctx.mock.restoreAll();await new Backups(t).prepare();assert.equal(JSON.parse(await fs.readFile(t.file,'utf8')).bots.find(b=>b.id==='a').name,'Alpha');assert.equal(await fs.readFile(path.join(t.data,'memory','note.md'),'utf8'),'备份记忆');assert.equal(JSON.parse(await fs.readFile(t.avatars.file,'utf8')).items[0].id,target.item.id);assert.equal((await new AvatarLibrary(t).load()).operation({action:'get',id:target.item.id}).image,oldImage);assert.notEqual(current.item.id,target.item.id);
 });
 test('pending relays survive Team restart and are removed with a deleted Bot',async ctx=>{
-  const t=await fixture(ctx),room=t.room('room');room.relayLimit=1;await t.delegateMentions(room,source(t,'@Bravo @Charlie 检查'));const saved=JSON.parse(await fs.readFile(t.file,'utf8'));t.state=saved;await relay.resume(t,t.room('room'));assert.equal(t.room('room').pausedRelays.length,0);assert(t.state.jobs.some(j=>j.botId==='c'&&j.relayKey));
+  const t=await fixture(ctx),room=t.room('room');room.relayGuard={idle:5,recent:[]};await t.delegateMentions(room,source(t,'@Bravo @Charlie 收到'));const saved=JSON.parse(await fs.readFile(t.file,'utf8'));assert.equal(saved.rooms[0].relayGuard.idle,6);t.state=saved;await relay.resume(t,t.room('room'));assert.equal(t.room('room').pausedRelays.length,0);assert(t.state.jobs.some(j=>j.botId==='c'&&j.relayKey));
   t.room('room').pausedRelays=[{id:'gone',key:'gone:c',botId:'c',sourceJobId:'s',task:'never run',options:{fromBotId:'a'}}];t.state.bots=t.state.bots.filter(b=>b.id!=='c');require('../src/roster-cleanup').cleanupRoster(t.state);assert.equal(t.room('room').pausedRelays.length,0);
 });
 test('invalid aside action cannot silently cancel an active answer',async ctx=>{

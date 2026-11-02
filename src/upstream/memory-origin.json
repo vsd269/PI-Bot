@@ -4,6 +4,7 @@
   "changes": [
     "Replace DSH-only imports with pure compatibility helpers",
     "Route oneShot through PI agent.complete; all file, panel, review, tool and snapshot logic retained",
-    "2026-10-31 PI privacy adaptation: protect private memory scopes, isolate new private journals, and keep user-controlled memory panels available"
+    "2026-10-31 PI privacy adaptation: protect private memory scopes, isolate new private journals, and keep user-controlled memory panels available",
+    "2026-11-03 PI adaptation: validate automatic memory changes individually; preserve readable changes, source-index diagnostics and real I/O failure retry semantics"
   ]
 }

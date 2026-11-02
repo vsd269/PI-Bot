@@ -46,7 +46,7 @@ class Learning{
   meta(p){return {id:p.id,botId:p.botId,private:privacy.isPrivate(this.team.state.bots.find(b=>b.id===p.botId)),kind:p.kind,name:p.name,reason:p.reason,status:p.status,at:p.at,path:p.path?.slice(-500),description:p.description};}
   candidates(botId,manual=false){const reviewed=this.data.reviews[botId];return this.team.state.jobs.filter(j=>j.botId===botId&&j.status==='completed'&&!j.cancelled&&j.result&&!j.isHandoffReply&&(manual||(j.durationMs||0)>=this.limits.minTurnMs)&&(!reviewed?.through||String(j.endedAt||'')>reviewed.through)).slice(-6);}
   async tick(){
-    if(this.closed||this.team.stopped||this.team.state.prefs?.learningReview!==true||this.running.size||this.busy()||Date.now()-this.lastActivity<this.limits.idleMs)return;
+    if(this.closed||this.team.stopped||this.team.storeConflict||this.team.state.prefs?.learningReview!==true||this.running.size||this.busy()||Date.now()-this.lastActivity<this.limits.idleMs)return;
     for(const bot of this.team.state.bots){const review=this.data.reviews[bot.id];if(Date.now()-(review?.at||0)<this.limits.intervalMs||!this.candidates(bot.id).length)continue;await this.review(bot.id);break;}
   }
   start(botId){

@@ -60,7 +60,7 @@ class Schedules{
   async toggle(id,enabled){const task=this.team.state.schedules.find(t=>t.id===id);if(!task)throw new Error('任务不存在。');if(task.status==='admitting')throw new Error('任务正在派发。');task.enabled=enabled===true;if(task.enabled){task.nextAt=nextTime(task.when,Date.now());if(!task.nextAt)throw new Error('一次性任务的时间已过，请编辑为未来时间。');task.status='scheduled';delete task.error;}await this.team.save();return this.view();}
   async remove(id){const task=this.team.state.schedules.find(t=>t.id===id);if(task?.status==='admitting')throw new Error('任务正在派发。');this.team.state.schedules=this.team.state.schedules.filter(t=>t.id!==id);await this.team.save();return this.view();}
   async tick(now=Date.now()){
-    if(this.busy||this.team.stopped)return;this.busy=true;
+    if(this.busy||this.team.stopped||this.team.storeConflict)return;this.busy=true;
     try{for(const task of this.team.state.schedules){
       if(!task.enabled||!task.nextAt||task.nextAt>now)continue;
       const target=task.targetKind==='room'?this.team.state.rooms.find(r=>r.id===task.targetId):this.team.state.bots.find(b=>b.id===task.targetId);

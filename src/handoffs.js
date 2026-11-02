@@ -1,4 +1,7 @@
 'use strict';
+const {createHash}=require('node:crypto');
+const {admit}=require('./work-admission');
+const privacy=require('./privacy');
 const TERMINAL=new Set(['completed','error','aborted','interrupted','not_started','needs_review']);
 class Handoffs{
   constructor(team){this.team=team;}
@@ -30,16 +33,27 @@ class Handoffs{
   }
   async resume(root){
     if(root.status!=='waiting_teammates'||root.cancelled||this.team.stopped||this.pending(root).length)return;
+    if((root.childIds||[]).some(id=>!this.find(id))){root.status='needs_review';root.error='部分队友执行记录已缺失，请核对原会话，没有重新派发。';await this.team.save();return;}
     const children=this.children(root),unread=children.filter(c=>!(root.consumedChildren||[]).includes(c.id));if(!unread.length)return;
+    if(unread.some(child=>['needs_review','interrupted','aborted'].includes(child.status))){root.status='needs_review';root.error='队友任务已停止或执行状态未确认。请先在恢复中心核对，未自动再次派发。';await this.team.save();return;}
     if(this.team.state.jobs.some(j=>j.handoffRootId===root.id&&this.team.active(j)))return;
     const target=this.team.state.bots.find(b=>b.id===root.botId);if(!target)return;
-    const text='继续原任务：'+root.task+'\n\n你交给队友的工作已全部交回。核对实际结果后完成原任务；可以继续分派必要的后续工作。最终答复会自动连同队友结果交回原请求者，不要给等待结果的上游发新消息。\n\n'+unread.map(c=>'['+this.team.botName(c.botId)+' · '+(c.status||'completed')+']\n'+(c.result||c.error||'未记录文字回复')).join('\n\n');
-    const job=this.team.enqueue(null,target,text,undefined,{attachments:root.attachments,referencesText:root.referencesText,handoffRootId:root.id,isHandoffReply:true,fromBotId:root.fromBotId,fromName:root.fromName});
-    root.consumedChildren=[...new Set([...(root.consumedChildren||[]),...unread.map(c=>c.id)])];root.resumeJobId=job.id;await this.team.save();
+    const room=root.roomId?this.team.state.rooms.find(r=>r.id===root.roomId):null;
+    if(root.roomId&&(!room||!room.members.includes(target.id)))return;
+    const text='继续原任务：'+root.task+'\n\n你交给队友的工作已全部交回。核对实际结果后完成原任务；可以继续分派必要的后续工作。失败结果不表示成功；不要自动重试失败任务或扩大权限，应说明阻塞并等待用户确认。最终答复会自动连同队友结果交回原请求者，不要给等待结果的上游发新消息。\n\n'+unread.map(c=>'['+this.team.botName(c.botId)+' · '+(c.status||'completed')+']\n'+(c.result||c.error||'未记录文字回复')).join('\n\n');
+    const ids=unread.map(c=>c.id),key='handoff:'+root.id+':'+createHash('sha256').update(JSON.stringify(ids.slice().sort())).digest('hex');
+    return admit(this.team,{room,bot:target,task:text,key,roundId:root.roundId,
+      options:{attachments:root.attachments,referencesText:root.referencesText,handoffRootId:root.id,isHandoffReply:true,fromBotId:root.fromBotId,fromName:root.fromName,sourceSessionId:root.sessionId,offRound:root.offRound,...(room?{groupEpoch:root.groupEpoch??0}:{})},
+      check:()=>{
+        if(!this.team.state.jobs.includes(root)||root.cancelled||root.status!=='waiting_teammates'||this.pending(root).length)throw Error('原任务已停止或等待条件已改变。');
+        for(const child of unread){const source=this.team.state.bots.find(b=>b.id===child.botId)||privacy.protectedBots(this.team).find(b=>b.id===child.botId);if(source)privacy.assertMessage(source,target);}
+      },
+      change:(edit,job)=>{edit.set(root,'consumedChildren',[...new Set([...(root.consumedChildren||[]),...ids])]);edit.set(root,'resumeJobId',job.id);}
+    });
   }
   async recover(){
     for(const root of this.team.state.jobs.filter(j=>j.status==='waiting_teammates')){
-      const continuation=this.find(root.resumeJobId);if(continuation&&['interrupted','error','aborted'].includes(continuation.status)){root.status='needs_review';root.error='任务交接后的续跑被中断。请在恢复中心检查会话后继续，未自动重跑工具。';await this.team.deliverResult(root);continue;}
+      const continuation=this.find(root.resumeJobId);if(continuation&&['interrupted','error','aborted','needs_review','not_started'].includes(continuation.status)){root.status='needs_review';root.error='任务交接后的续跑被中断。请在恢复中心检查会话后继续，未自动重跑工具。';await this.team.deliverResult(root);continue;}
       await this.resume(root);
     }
   }

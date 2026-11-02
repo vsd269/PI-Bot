@@ -266,7 +266,7 @@ export function reviewEntries(home, team, budget = REVIEW_MEMORY_MAX, about = ''
 // The memory review's answer: {"changes": […]}, perhaps in a code fence, where
 // every change is well formed. Anything else is no answer, so the review keeps its
 // place and reads the turn again.
-export function parseReview(text) {
+export function parseReview(text, partial = false) {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
   if (start === -1 || end <= start) return undefined
@@ -277,7 +277,7 @@ export function parseReview(text) {
     return undefined
   }
   if (value === null || typeof value !== 'object' || !Array.isArray(value.changes)) return undefined
-  return value.changes.every(wellFormed) ? value.changes : undefined
+  return partial || value.changes.every(wellFormed) ? value.changes : undefined
 }
 const wellFormed = (change) => {
   if (change === null || typeof change !== 'object') return false
@@ -1407,17 +1407,17 @@ export function install(rt) {
       const earlier = batch.earlier.map(line => reviewLine(line.who, line.text, keeper))
       const language = writtenIn(read.filter(line => line.who === 'user').map(line => line.text.replace(/^User: /, '')), languageNow())
       const reply = await botShot(keeper, reviewSystem({ teamWrites: teamWrites(), group }), reviewRequest({ who, tag: tagged, numbered, left, sizes, where: batch.where, earlier, fresh: fresh.texts, more, language }), tag)
-      const changes = parseReview(reply)
-      if (changes === undefined) throw new Error(`the model's answer is not a list of changes: ${clip(reply.replace(/\s+/g, ' '), 120)}`)
-      const unknown = changes.find(change => change.op !== 'add' && numbered[Number(change.entry) - 1] === undefined)
-      if (unknown !== undefined) throw new Error(`the model's answer names entry ${unknown.entry}, which is not listed`)
-      // A secret is left out for good; any other entry memory cannot keep (one too
-      // long, say) fails the answer, so the next review reads the lines again.
+      const proposed = parseReview(reply, true)
+      if (proposed === undefined) throw new Error('the model did not return a readable list of memory changes; original lines retained')
+      const rejected = []
+      const changes = proposed.filter((change, index) => {
+        const bad = !wellFormed(change) || change.op !== 'add' && numbered[Number(change.entry) - 1] === undefined || change.op !== 'remove' && entryProblem(cleanEntry(change.text)) !== undefined || change.op === 'add' && typeof change.topic === 'string' && change.topic.trim() !== '' && cleanTopic(change.topic) === undefined
+        if (bad) rejected.push(index + 1)
+        return !bad
+      })
+      // Diagnose by source range/index, never by copying a rejected secret.
+      if (rejected.length) rt.warn('Memory review %s through %s skipped invalid change numbers %s; valid changes were kept.', key, batch.through, rejected.slice(0, 50).join(','))
       const applied = changes.slice(0, REVIEW_CHANGES_MAX)
-      const unfit = applied.filter(change => change.op !== 'remove').map(change => cleanEntry(change.text)).find(text => !secretEntry(text) && entryProblem(text) !== undefined)
-      if (unfit !== undefined) throw new Error(`the model's answer holds an entry memory cannot keep: ${entryProblem(unfit)}`)
-      const badTopic = applied.find(change => change.op === 'add' && typeof change.topic === 'string' && change.topic.trim() !== '' && cleanTopic(change.topic) === undefined)
-      if (badTopic !== undefined) throw new Error(`the model's answer names the topic "${clip(badTopic.topic, 60)}", which cannot be a topic name`)
       if (!alive()) return
       const changed = await applyReview({ keeper, name, home, numbered, changes: applied, source: batch.source(read), teamWrites })
       if (!alive()) return

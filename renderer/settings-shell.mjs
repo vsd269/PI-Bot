@@ -1,5 +1,5 @@
 import {el,icon} from './dom.mjs';
-export const SETTINGS_PAGES=[['general','通用','GearIcon'],['bots','Bot','PeopleIcon'],['groups','群聊','ChatsIcon'],['connectors','连接器','ConnectorIcon'],['capabilities','能力','PlugIcon'],['schedules','定时任务','ClockIcon'],['usage','用量','GaugeIcon'],['secrets','密钥','KeyIcon'],['feedback','反馈','FeedbackIcon'],['about','关于 PI Bot','InfoIcon']];
+export const SETTINGS_PAGES=[['general','通用','GearIcon'],['attention','待处理','InfoIcon'],['bots','Bot','PeopleIcon'],['groups','群聊','ChatsIcon'],['connectors','连接器','ConnectorIcon'],['capabilities','能力','PlugIcon'],['schedules','定时任务','ClockIcon'],['usage','用量','GaugeIcon'],['secrets','密钥','KeyIcon'],['feedback','反馈','FeedbackIcon'],['about','关于 PI Bot','InfoIcon']];
 // Same structure and CSS classes as upstream SettingsDialog (198px navigation,
 // fixed header, independently scrolling content, wide Usage page).
 export function createSettingsShell({app,onNavigate,onNative,onLeave}){

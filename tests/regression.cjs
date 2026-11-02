@@ -81,9 +81,9 @@ test('slow resource cleanup cannot hold visible deletion open',async ctx=>{
 test('updating a bot does not overwrite messages added while validating an avatar',async ctx=>{
  const {team:t}=await fixture(ctx),b=t.bot('worker'),modelGate=gate(),entered=gate();t.models=async()=>{entered.resolve();await modelGate.promise;return [{key:'new'}];};const updating=t.upsertBot({...b,modelKey:'new',compact:true});await entered.promise;b.chat.push({text:'concurrent'});modelGate.resolve();await updating;assert.equal(b.chat[0].text,'concurrent');
 });
-test('mutual mentions stop before scheduling a cycle; new human message resets budget',async ctx=>{
+test('useful mutual mentions continue; new human message resets separate unattended budget',async ctx=>{
  const {team:t}=await fixture(ctx);t.state.bots.push({id:'third',name:'Third',role:'Worker',modelKey:''});const room={id:'room',members:['worker','third'],log:[]};t.state.rooms=[room];t.enqueue=(room,bot,task,round,options)=>{const j={id:'j'+t.state.jobs.length,botId:bot.id,...options};t.state.jobs.push(j);return j;};
- await t.delegateMentions(room,{botId:'worker',result:'@Third 请继续'});assert.equal(t.state.jobs.length,1);const job=t.state.jobs[0];job.result='@Worker 请继续';await t.delegateMentions(room,job);assert.equal(t.state.jobs.length,1);assert(room.log.some(l=>l.text.includes('停止')));
+ await t.delegateMentions(room,{botId:'worker',result:'@Third 请继续'});assert.equal(t.state.jobs.length,1);const job=t.state.jobs[0];job.result='@Worker 已检查，请补齐缺少的附件';await t.delegateMentions(room,job);assert.equal(t.state.jobs.length,2);assert.equal(room.log.some(l=>l.text.includes('暂停')),false);
  t.state.unattended.sent=40;await assert.rejects(()=>t.admitBotMessage(),/暂停/);t.userSpoke();await t.admitBotMessage();assert.equal(t.state.unattended.sent,1);
 });
 test('legitimate A to B to C automatic handoff still works',async ctx=>{
@@ -94,8 +94,8 @@ test('concurrent automatic admissions enforce a shared 40-message ceiling',async
  const {team:t}=await fixture(ctx);t.save=async()=>{};const outcomes=await Promise.allSettled(Array.from({length:60},()=>t.admitBotMessage()));assert.equal(outcomes.filter(o=>o.status==='fulfilled').length,40);assert.equal(t.state.unattended.sent,40);
 });
 test('failed admission does not consume budget',async ctx=>{const {team:t}=await fixture(ctx);t.save=async()=>{throw Error('disk');};await assert.rejects(()=>t.admitBotMessage());assert.equal(t.state.unattended.sent,0);});
-test('exhausted automatic handoffs show a pause in group without scheduling another job',async ctx=>{
- const {team:t}=await fixture(ctx);t.state.bots.push({id:'b',name:'Bravo',role:'Worker'});const room={id:'room',members:['worker','b'],log:[],relayLimit:6,relayCount:6};t.state.rooms=[room];t.enqueue=()=>{throw Error('must not enqueue');};await t.delegateMentions(room,{id:'source',botId:'worker',result:'@Bravo 请继续'});assert(room.log.some(l=>l.text.includes('暂停')));assert.equal(room.pausedRelays.length,1);
+test('idle automatic handoffs show a pause in group without scheduling another job',async ctx=>{
+ const {team:t}=await fixture(ctx);t.state.bots.push({id:'b',name:'Bravo',role:'Worker'});const room={id:'room',members:['worker','b'],log:[],relayGuard:{idle:5,recent:[]}};t.state.rooms=[room];t.enqueue=()=>{throw Error('must not enqueue');};await t.delegateMentions(room,{id:'source',botId:'worker',result:'@Bravo 收到'});assert(room.log.some(l=>l.text.includes('暂停')));assert.equal(room.pausedRelays.length,1);
 });
 test('repeated cross-group posting stops before reserving a new round',async ctx=>{
  const {team:t}=await fixture(ctx);const r={id:'other',name:'Other',botRounds:0};await assert.rejects(()=>postToGroup(t,r,{message:'hi'},{bot:t.bot('admin')},{hop:40}),/暂停/);assert.equal(t.roomPending.size,0);assert.equal(r.botRounds,0);

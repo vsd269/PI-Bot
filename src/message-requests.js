@@ -3,6 +3,7 @@ const groupWork=require('./group-stop');
 const {createHash,randomUUID}=require('node:crypto');
 const privacy=require('./privacy');
 const {StateEdit}=require('./state-edit');
+const {findBot}=require('./bot-reference');
 const states=new Set(['admitting','accepted','failed','interrupted']);
 function validateRequests(state){
   if(state.messageBotRequests===undefined)return;
@@ -32,7 +33,7 @@ function delegationStatus(team,owner,requestId){
   return {requestId,status:record.status,jobId:record.jobId,executionStatus:job?.status||(planner?'planner_returned':record.status==='accepted'?'needs_review':record.status),replyDelivered:job?.replyDelivered===true,verification:'not_independently_verified',note:planner?'管理员规划回合已返回；这不表示其分派任务已完成或成果已验收。':!job&&record.status==='accepted'?'派发已接收，但没有可关联的执行记录；请核对原会话。':'这是已保存的任务状态，不代表外部操作只执行一次或成果已通过验收。'};
 }
 async function dispatchMessageBot(team,args,owner,ctx){
-  const matches=team.state.bots.filter(bot=>bot.name===args.to||bot.id===args.to);if(matches.length!==1)throw Error('No unique Bot named '+args.to);const target=matches[0];
+  const target=findBot(team,args.to);
   if(target.id===owner.bot.id)throw Error('Cannot message yourself.');
   privacy.assertMessage(owner.bot,target);
   const content=String(args.message||'').trim();if(!content||content.length>1000000)throw Error('Message must have 1–1000000 characters.');
@@ -51,7 +52,7 @@ async function dispatchMessageBot(team,args,owner,ctx){
   }
   // A duplicate must not be rejected by ancestry which changed after admission.
   const source=team.state.jobs.findLast(job=>job.sessionId===ctx.sessionId&&(!ctx.turnId||job.turnId===ctx.turnId)&&team.active(job));
-  team.handoffs.check(source,target.id);const parent=!owner.room&&replyTo?team.handoffs.root(source):null;
+  team.handoffs.check(source,target.id);const parent=replyTo?team.handoffs.root(source):null;
   if(team.state.messageBotRequests.length>=10000)throw Error('消息去重记录已达上限，请先备份并升级 PI Bot。');
   if(team.stopped||ctx.signal?.aborted)throw Error('PI-bot is stopping.');
   const planner=!owner.room&&target.role==='Administrator'&&target.agentMode!=='agent';

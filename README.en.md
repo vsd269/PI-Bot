@@ -4,6 +4,16 @@ Persistent Bot teams for **PI Desktop**. [简体中文](README.md)
 
 PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DS Bot distribution, and it does not claim complete feature parity.
 
+## New in 0.3.90
+
+Persist-before-execute admission now covers continuations, answered questions, result delivery, manual recovery and group batches. Group results return through the existing planner session; unanswered questions block collection, and unknown or interrupted submissions are not replayed blindly. Automatic follow-up is limited to two additional batches and does not run for a normal greeting.
+
+Settings now includes **待处理 / Pending** for user questions, native approval links, proposals, execution issues and completed turns awaiting review. A completed turn is not an independently verified outcome. State-file writer locking and external-change protection preserve both copies before user reconciliation; automatic memory review handles malformed changes individually.
+
+During group work, the existing send action becomes a stop button and returns to send afterward. Normal text relays have no fixed count ceiling; only consecutive no-tool acknowledgement or exact repeated replies are parked for user continuation. Experience actions now sit next to their heading.
+
+Local regression: 283 passed, 1 skipped due to Windows symlink permissions, 0 failed. Headless UI checks cover Pending, existing upstream features/layout, privacy settings and attachments. Real PI Desktop/model acceptance is still required. See [entry points and limits](docs/RELEASE-0.3.90.md).
+
 ## New in 0.3.89
 
 This cumulative release includes the 0.3.87–0.3.89 changes: durable acknowledgement of request-ID worker delegations, bounded execution history, group-wide stop, user-approved Skill and AGENTS.md proposals, responsive resizable sidebars, lightweight Office tools, and plugin-level private Bots.

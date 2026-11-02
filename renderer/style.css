@@ -336,6 +336,7 @@ button.bt-token>.bt-mark{flex:none}
 
 /* Keep one primary composer action, as in upstream: voice while empty, send with text. */
 .composer #continuous-voice{display:none}.composer:has(#submit:disabled) #continuous-voice{display:inline-grid}.composer #dictate{background:color-mix(in srgb,var(--bt-ink) 5%,transparent);box-shadow:inset 0 0 0 .5px var(--bt-line)}
+.composer[data-group-working]:has(#submit) #continuous-voice{display:none!important}.composer #submit[data-action=stop]:disabled{display:flex!important;opacity:.55;cursor:wait}.pi-stop-square{display:block;width:10px;height:10px;border-radius:2px;background:currentColor}
 
 .pi-speech-actions{flex-wrap:wrap;gap:10px}.pi-speech-actions [role=status]{flex-basis:100%;line-height:1.7}.pi-speech-save{background:var(--bt-accent)!important;border-color:var(--bt-accent)!important;color:var(--bt-accent-ink,#fff)!important}
 
@@ -530,7 +531,7 @@ button.bt-token>.bt-mark{flex:none}
 .pi-bot-app[data-message-layout=flat] .bt-group-msg>.bt-msg-line>.bt-bubble{background:transparent;border:0;border-radius:0;padding:4px 0;box-shadow:none;flex:1}
 .pi-width-control{display:flex;align-items:center;gap:12px;min-width:140px}.pi-width-control input{width:130px;accent-color:var(--bt-accent)}.pi-width-control output{font-size:12px;min-width:36px;color:var(--bt-ink-2)}
 .pi-relay-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 auto 8px;padding:9px 12px;border:1px solid var(--bt-line-2);border-radius:12px;background:var(--bt-card);font-size:12px;color:var(--bt-ink-2)}.pi-relay-strip[hidden]{display:none}
-.pi-relay-limit{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--bt-ink-2);padding:10px 0}.pi-relay-limit input{width:72px;min-width:0;background:var(--bt-card);color:var(--bt-ink);border:1px solid var(--bt-line-2);border-radius:6px;padding:6px}
+.pi-relay-help{margin:8px 0;color:var(--bt-ink-2);font-size:12px;line-height:1.65;overflow-wrap:anywhere}
 .pi-btw-card{border-left:3px solid var(--bt-accent)}.pi-btw-answer{padding-top:12px;margin-top:12px;border-top:1px solid var(--bt-line)}
 .pi-view-row{display:flex;flex-wrap:wrap;gap:12px}.pi-view-row>*{flex:1 1 160px;min-width:0}.pi-view-control{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;font-size:13px}.pi-view-control>span{flex:1 1 100%;color:var(--bt-ink-2)}.pi-view-control input[type=range]{flex:1;min-width:80px;accent-color:var(--bt-accent)}.pi-view-control :is(input[type=number],select){min-width:0;max-width:100%;padding:7px 10px;border:1px solid var(--bt-line-2);border-radius:8px;background:var(--bt-main);color:var(--bt-ink);font:inherit}.pi-view-control input[type=checkbox]{accent-color:var(--bt-accent)}.pi-view-control output{min-width:45px;font-variant-numeric:tabular-nums}
 .pi-view-callout{border-left:3px solid var(--bt-accent);padding:10px 12px;background:var(--bt-hover);margin:0;white-space:pre-wrap}.pi-view-callout[data-tone=bad]{border-color:#ce4b4b}.pi-view-callout[data-tone=warn]{border-color:#b87916}.pi-view-callout[data-tone=good]{border-color:#25854d}.pi-view-sources{margin:0;padding-left:18px;font-size:13px}.pi-view-sources a{color:var(--bt-accent);overflow-wrap:anywhere}
@@ -553,8 +554,8 @@ button.bt-token>.bt-mark{flex:none}
 .pi-member-heading .bt-section-title{margin:12px 0}
 .pi-member-heading button:disabled{opacity:.5;cursor:default}
 
-.pi-learning-suggestions{max-width:900px;margin:18px auto;padding:0 20px;color:var(--bt-ink-2);font-size:12px}
-.pi-learning-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.pi-learning-suggestions{max-width:748px;margin:18px auto;padding:0;color:var(--bt-ink-2);font-size:12px}
+.pi-learning-heading{display:flex;align-items:center;justify-content:flex-start;gap:10px;flex-wrap:wrap}.pi-learning-heading>.pi-learning-label{font-weight:500}.pi-learning-heading button{flex:none}
 .pi-learning-card{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:10px;padding:14px;border:1px solid var(--bt-line);border-radius:12px;background:var(--bt-card)}
 .pi-learning-card>div{min-width:0}.pi-learning-card strong{font-weight:500;color:var(--bt-ink)}.pi-learning-card p,.pi-learning-hint{margin:6px 0;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .pi-learning-card button{flex-shrink:0}.pi-learning-dialog{width:min(760px,calc(100% - 32px));max-height:calc(100dvh - 48px);padding:0;border:1px solid var(--bt-line);border-radius:18px;color:var(--bt-ink);background:var(--bt-main)}

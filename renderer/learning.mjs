@@ -30,7 +30,7 @@ export function createLearning({app,chat,call,refresh,notice}){
     const news=state.learningNews||{pending:[],running:[]},botId=selected?.kind==='bot'?selected.id:null,proposals=(news.pending||[]).filter(p=>p.botId===botId),running=(news.running||[]).includes(botId),review=news.reviews?.[botId];
     const next=JSON.stringify([botId,proposals,running,review]);if(next===key)return;key=next;host.hidden=!botId;if(!botId)return;host.replaceChildren();
     const head=el('div','','pi-learning-heading'),status=el('span',running?'正在复盘已完成的任务…':proposals.length?proposals.length+' 条工作经验建议待确认':'工作经验','pi-learning-label');status.setAttribute('role','status');
-    const reviewButton=soft('复盘经验',async()=>{try{const result=await call('team.learning',{action:'review',botId});notice(result.busy?'已有经验复盘正在进行。':'正在复盘，生成的建议会显示在这里；不会自动写入。');await refresh();}catch(error){notice(error.message);}});reviewButton.disabled=running;head.append(status,reviewButton);host.append(head);
+    const reviewButton=soft('复盘经验',async()=>{try{const result=await call('team.learning',{action:'review',botId});notice(result.busy?'已有经验复盘正在进行。':'正在复盘，生成的建议会显示在这里；不会自动写入。');await refresh();}catch(error){notice(error.message);}});reviewButton.title='将已完成任务整理成经验建议，由你确认后保存';reviewButton.disabled=running;head.append(status,reviewButton);host.append(head);
     if(review?.error)host.append(el('p','上次复盘未完成：'+review.error,'pi-learning-hint'));
     else if(review&&review.proposed===0)host.append(el('p','最近这次复盘没有发现需要新增的通用经验。','pi-learning-hint'));
     for(const p of proposals){const card=el('div','','pi-learning-card'),copy=el('div');copy.append(el('strong',p.kind==='skill'?'建议保存 Skill：'+p.name:'建议更新 AGENTS.md'),el('p',p.reason));card.append(copy,soft('查看并确认',()=>open(p)));host.append(card);}

@@ -3,6 +3,7 @@ import {createExtensions} from './extensions.mjs';
 import {mountSkillImport} from './skill-import.mjs';
 import {el} from './dom.mjs';
 import {createAdvanced} from './advanced.mjs';
+import {createAttention} from './attention.mjs';
 import {createSettingsShell} from './settings-shell.mjs';
 import {createSettingsPages} from './settings-pages.mjs';
 import {THEMES} from './upstream/themes.mjs';
@@ -28,7 +29,7 @@ const num=value=>Number.isFinite(value)?value.toLocaleString():'未记录';
 export function createFeatures({app,call,getState,update,selectChat,onNative,notice,editEntity,avatar,cluster,assignCapabilities,savePreferences}){
   let generation=0,memoryTimer,disposeBody;
   const leave=()=>{disposeBody?.();disposeBody=null;clearTimeout(memoryTimer);};
-  const shell=createSettingsShell({app,onNative,onLeave:leave,onNavigate:page=>pages.open(page).catch(e=>notice(e.message))}),{dialog,body}=shell;
+  const shell=createSettingsShell({app,onNative,onLeave:leave,onNavigate:page=>(page==='attention'?attention.open():pages.open(page)).catch(e=>notice(e.message))}),{dialog,body}=shell;
   const originalNotice=notice;notice=value=>{originalNotice(value);if(dialog.open)shell.notify(value);};
   const goNative=()=>{dialog.close();onNative();};
   const routes={'通用':'general','外观与记忆设置':'general','能力库':'capabilities','能力':'capabilities','用量统计':'usage','用量':'usage','自动化任务':'schedules','定时任务':'schedules','Bot 密钥管理':'secrets','密钥':'secrets','连接器':'connectors','Bot MCP 授权':'connectors','关于 PI-bot':'about','备份与恢复':'about','扩展功能':'about','任务恢复中心':'about','反馈':'feedback'};
@@ -202,6 +203,7 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
   }
   async function plugins(){return capabilities();}
   function about(){show('关于 PI-bot');info('PI Bot 0.3.78 · 面向 PI-Desktop 插件接口适配。对照上游 0.1.7：Fei2411 / DeepSeek-Bot，保留原许可证和来源记录。');info('PI 适配保留自定义头像、侧栏入口和“PI 原生界面”返回入口。群聊保留串行与并行；主机器人可选只规划分派或在私聊直接执行。');info('使用 PI 原生 Agent 的上下文压缩和工具审批。新增按 Bot 授权的本地 MCP、Windows 加密密钥库、加密密钥迁移及任务恢复中心。MCP 授权约束本插件桥接入口，PI 原生全局工具仍由 PI 管理。恢复依据会话记录，不是执行中途的进程快照。扩展功能包含每 Bot 独立 Edge/Chrome 浏览器、语音转写与系统朗读、Windows OCR、完整会话索引和本机 Bot API。专属命令工具支持密钥环境变量；PI 原生 shell 保持由客户端管理。');const diagnostics=getState().diagnostics||[];body.append(button('导出诊断（不含聊天正文）',()=>download('PI-bot-diagnostics.json',JSON.stringify(diagnostics,null,2),'application/json')));}
+  const attention=createAttention({body,show,call,isCurrent:token=>token===generation&&dialog.open,selectChat,close:()=>dialog.close(),notice,recovery:advanced.recovery});
   const pages=createSettingsPages({body,show,call,getState,update,savePreferences,notice,onNative:goNative,download,editEntity,avatar,cluster,isCurrent:token=>token===generation&&dialog.open,legacy:{preferences,capabilities,schedules,secrets:advanced.secrets,mcp:advanced.mcp,recovery:advanced.recovery,backups,extensions:extensions.extensions,history}});
   return {...advanced,...extensions,plugins,preferences:()=>pages.open('general'),connectors:()=>pages.open('connectors'),capabilities,usage:options=>pages.open('usage',options),schedules,secrets:botId=>pages.open('secrets',{botId}),history,archivedHistory,memory,backups,about:()=>pages.open('about'),settings:page=>pages.open(page||'general'),isSettingsOpen:shell.isOpen,presentEntity(kind,name,form,restore){show(name,{page:kind==='bot'?'bots':'groups',move:'in',back:()=>pages.open(kind==='bot'?'bots':'groups')});const wrap=el('div','','bt-settings-form');wrap.append(form);body.append(wrap);disposeBody=restore;},close(){extensions.dispose();shell.dispose();}};
 }

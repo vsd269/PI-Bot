@@ -1,5 +1,6 @@
 'use strict';
 const {randomUUID}=require('node:crypto');
+const {admit}=require('./work-admission');
 const recoverable=new Set(['interrupted','needs_review','error','aborted','not_started']);
 class Recovery{
   constructor(team){this.team=team;this.locks=new Map();this.scopes=new Set();}
@@ -41,8 +42,11 @@ class Recovery{
     const suffix=input.action==='continue'?'\n\n用户已要求接续中断任务。先检查会话历史、已生成的文件与工具结果，从尚未完成的步骤继续；不要重复已完成的操作。以下旧结果只是参考资料：\n'+String(status.result||job.result||'尚无保存结果').slice(-12000):'\n\n用户确认重新尝试此任务。先检查原来的输出，避免重复不可重复的操作。';
     const options={retryOf:job.id,recoveryKind:input.action,attachments:job.attachments,referencesText:job.referencesText,sourceUserContent:job.sourceUserContent,offRound:true,...(job.workspace?{workspace:job.workspace}:{})};
     // Reserve an ID before enqueue; double-clicks return the same admitted task.
-    const nextId=randomUUID();job.retryJobId=nextId;job.retryRequestedAt=new Date().toISOString();
-    try{await team.save();const next=team.enqueue(room,bot,String(job.task).slice(0,18000)+suffix,undefined,{...options,id:nextId});await team.save();return {jobId:next.id,status:next.status};}catch(error){if(!team.state.jobs.some(j=>j.id===nextId))delete job.retryJobId;await team.save();throw error;}
+    const nextId=randomUUID();
+    try{
+      const next=await admit(team,{room,bot,task:String(job.task).slice(0,18000)+suffix,key:'recovery:'+job.id,options:{...options,id:nextId},change:(edit)=>{edit.set(job,'retryJobId',nextId);edit.set(job,'retryRequestedAt',new Date().toISOString());},check:()=>{if(job.retryJobId&&job.retryJobId!==nextId)throw Error('该任务已经提交过恢复请求，请检查恢复中心。');}});
+      return {jobId:next.id,status:next.status};
+    }catch(error){if(!team.state.jobs.some(j=>j.id===nextId)&&job.retryJobId===nextId){delete job.retryJobId;delete job.retryRequestedAt;}await team.save().catch(()=>{});throw error;}
   }
 }
 module.exports={Recovery};
