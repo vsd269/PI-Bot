@@ -1,0 +1,68 @@
+name: Prepare release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag with a draft release
+        required: true
+        type: string
+      expected_sha256:
+        description: SHA-256 of the locally verified plugin package
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify version and unpublished release
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid version tag' }
+          if ($env:EXPECTED_SHA256 -notmatch '^[a-fA-F0-9]{64}$') { throw 'Invalid expected checksum' }
+          $manifest = Get-Content manifest.json -Raw | ConvertFrom-Json
+          if ('v' + $manifest.version -ne $env:RELEASE_TAG) { throw 'Tag and manifest differ' }
+          $draft = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft
+          if ($LASTEXITCODE -ne 0 -or $draft -ne 'true') { throw 'Only an existing draft release may receive assets' }
+      - run: npm run check
+      - run: npm test
+      - run: npm run package
+      - run: npm run verify:package
+      - run: npm run preflight:market
+      - name: Verify package bytes and build source archive
+        shell: pwsh
+        run: |
+          $manifest = Get-Content manifest.json -Raw | ConvertFrom-Json
+          $package = 'dist/' + $manifest.id + '-' + $manifest.version + '.piplug'
+          $actual = (Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:EXPECTED_SHA256.ToLowerInvariant()) { throw 'Remote package does not match the reviewed local package' }
+          $sourceName = 'PI-Bot-' + $manifest.version + '-source.zip'
+          git archive --format=zip ('--prefix=PI-Bot-' + $manifest.version + '/') -o ('dist/' + $sourceName) HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed' }
+          $hash = (Get-FileHash -LiteralPath ('dist/' + $sourceName) -Algorithm SHA256).Hash.ToLowerInvariant()
+          Add-Content -LiteralPath dist/SHA256SUMS.txt -Value ($hash + '  ' + $sourceName) -Encoding utf8
+      - name: Upload assets to draft only
+        shell: pwsh
+        run: |
+          $draft = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --json isDraft --jq .isDraft
+          if ($LASTEXITCODE -ne 0 -or $draft -ne 'true') { throw 'Release is no longer a draft' }
+          $files = @(Get-ChildItem dist/*.piplug,dist/*-source.zip,dist/SHA256SUMS.txt | ForEach-Object FullName)
+          gh release upload $env:RELEASE_TAG @files --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
