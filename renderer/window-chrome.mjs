@@ -4,6 +4,9 @@ export function attachWindowChrome(root) {
   root.dataset.piBotSurface='inactive';
   const style=document.createElement('style');style.dataset.piBotWindowChrome='';document.head.append(style);
   const app=root.shadowRoot.querySelector('.pi-bot-app');
+  // Electron's draggable region lives outside the clipped Shadow DOM surface.
+  const drag=document.createElement('div');drag.dataset.piBotWindowDrag='';drag.setAttribute('aria-hidden','true');
+  drag.style.cssText='position:fixed;display:none;pointer-events:auto;-webkit-app-region:drag;app-region:drag;user-select:none;';root.parentElement.append(drag);
   let stopped=false,frame=0,controls;
   const resize=new ResizeObserver(schedule);
   resize.observe(root);
@@ -13,6 +16,8 @@ export function attachWindowChrome(root) {
     if(next!==controls){resize.disconnect();resize.observe(root);controls=next;if(controls)resize.observe(controls);}
     const rect=controls?.getBoundingClientRect();
     const rootRect=root.getBoundingClientRect(),width=rect?.width>0?Math.max(0,Math.ceil(rootRect.right-rect.left)):0;
+    const conversation=app.querySelector('.conversation').getBoundingClientRect(),start=Math.max(rootRect.left,conversation.left),end=Math.min(rootRect.right,rect?.left||rootRect.right);
+    Object.assign(drag.style,{left:start+'px',top:rootRect.top+'px',width:Math.max(0,end-start)+'px',height:'46px',display:root.dataset.piBotSurface==='active'&&end>start?'block':'none'});
     if(app.style.getPropertyValue('--pi-window-controls-width')!==width+'px')app.style.setProperty('--pi-window-controls-width',width+'px');
     // The native app shell may isolate stacking contexts. Leave a real hole
     // in our surface so its window controls remain visible and clickable.
@@ -36,11 +41,11 @@ export function attachWindowChrome(root) {
   const observer=new MutationObserver(schedule);
   observer.observe(document.body,{childList:true,subtree:true});
   const appearance=new MutationObserver(schedule);
-  appearance.observe(app,{attributes:true,attributeFilter:['style','data-ds-dark-theme']});
+  appearance.observe(app,{attributes:true,attributeFilter:['style','data-ds-dark-theme','data-frame-layout','data-sidebar-collapsed','data-sidebar-drawer']});
   window.addEventListener('resize',schedule);update();
   return {
     update,
     setActive(value){root.dataset.piBotSurface=value?'active':'inactive';schedule();},
-    close(){stopped=true;cancelAnimationFrame(frame);observer.disconnect();appearance.disconnect();resize.disconnect();window.removeEventListener('resize',schedule);style.remove();delete root.dataset.piBotSurface;},
+    close(){stopped=true;cancelAnimationFrame(frame);observer.disconnect();appearance.disconnect();resize.disconnect();window.removeEventListener('resize',schedule);style.remove();drag.remove();delete root.dataset.piBotSurface;},
   };
 }

@@ -69,7 +69,7 @@ async function admitBatch(team,{room=null,assignments,roundId=randomUUID(),optio
         const job=team.enqueue(room,bot,assignment.task,roundId,{...options,...(collectResults?{batchId:roundId}:{}),clientMessageId:undefined,sourceUserContent:request},gate);jobs.push(job);
         edit.undo.push(()=>{job.cancelled=true;team.state.jobs=team.state.jobs.filter(j=>j!==job);});
       }
-      if(collectResults)edit.append(team.state,'workBatches',{id:roundId,roomId:room.id,adminId,groupEpoch:options.groupEpoch,jobIds:jobs.map(j=>j.id),request,status:'running',depth,at:new Date().toISOString()});
+      if(collectResults)edit.append(team.state,'workBatches',{id:roundId,roomId:room.id,adminId,scheduleRunId:options.scheduleRunId,groupEpoch:options.groupEpoch,jobIds:jobs.map(j=>j.id),request,status:'running',depth,at:new Date().toISOString()});
       if(sourceBatch){edit.set(sourceBatch,'nextBatchId',roundId);edit.set(sourceBatch,'status','completed');edit.set(sourceBatch,'resultIds',sourceBatch.jobIds.slice());}
     });
     release(true);return jobs;

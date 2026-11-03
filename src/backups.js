@@ -32,6 +32,7 @@ function validateState(state){
   }
   for(const key of ['schedules','questions','completions','archives'])if(state[key]!==undefined&&(!Array.isArray(state[key])||state[key].some(v=>!v||typeof v!=='object'||Array.isArray(v))))throw Error('备份中的任务或记录无效。');
   if(state.views!==undefined)validateRecords(state.views,state.bots);
+  require('./file-waits').validateWaits(state);
   validateRequests(state);validateClaims(state);validateBatches(state);validateLog(state.executionLog);validatePrivateState(state);require('./learning').validateLearning(state);
   if(state.attentionReceipts!==undefined&&(!Array.isArray(state.attentionReceipts)||state.attentionReceipts.length>2000||state.attentionReceipts.some(r=>!r||typeof r.id!=='string'||r.id.length>500||typeof r.version!=='string'||!/^[a-f0-9]{64}$/.test(r.version))))throw Error('待处理查看记录无效。');
   require('./asides').validateAsides(state);
@@ -86,6 +87,7 @@ function pausedState(value){
   for(const room of state.rooms){room.planning=false;room.sessions={};for(const report of room.reports||[])report.interrupted=true;}
   for(const job of state.jobs)if(['queued','launching','running','waiting','waiting_teammates'].includes(job.status)){job.status='interrupted';job.error='已从备份恢复；请检查原生会话后手动重新派发。';}
   for(const batch of state.workBatches||[])if(['running','planning'].includes(batch.status)){batch.status='needs_review';batch.error='备份恢复后需要手动核对，未自动再次执行。';}
+  for(const wait of state.fileWaits||[])if(wait.status==='waiting'){wait.status='cancelled';wait.error='备份恢复后不会自动触发，请重新创建文件等待。';}
   for(const task of state.schedules||[]){task.enabled=false;task.status='needs_review';task.error='已恢复配置，请检查工作区、时间后手动启用。';}
   for(const question of state.questions||[]){question.deliveryPending=false;if(question.status==='pending')question.status='interrupted';}
   for(const aside of state.asides||[])if(aside.status==='answering'){aside.status='cancelled';aside.error='恢复备份已中止侧问。';}

@@ -5,6 +5,7 @@ const {archiveChat}=require('./roster-actions');
 // roster references are migrated; malformed configuration must still fail.
 function cleanupRoster(state,edit=new StateEdit()){
   const ids=new Set(state.bots.map(bot=>bot.id));
+  for(const wait of state.fileWaits||[])if(wait.status==='waiting'&&!ids.has(wait.botId))edit.set(wait,'status','cancelled');
   for(const connector of state.botConnectors||[])edit.remove(connector,'botIds',id=>!ids.has(id));
   edit.remove(state,'secretRequests',request=>!ids.has(request.botId));
   edit.remove(state,'asides',aside=>!ids.has(aside.botId));

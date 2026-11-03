@@ -40,7 +40,8 @@ async function createView(team,args,owner,ctx){
   if(!team.state.bots.some(bot=>bot.id===owner.bot.id))throw Error('该 Bot 已被删除。');
   const checked=checkedView(args.title,args.view);
   if(checked.interactive&&args.await_reply===false||!checked.interactive&&args.await_reply===true)throw Error(checked.interactive?'交互卡片需要用户回答；请勿设置 await_reply: false。':'展示卡片没有可提交的控件；请设置 await_reply: false。');
-  const record={id:randomUUID(),botId:owner.bot.id,sessionId:ctx?.sessionId,title:checked.title,view:checked.view,status:checked.interactive?'pending':'displayed',at:new Date().toISOString()};
+  const origin=team.state.jobs.findLast(j=>j.sessionId===ctx?.sessionId&&team.active(j));
+  const record={id:randomUUID(),sourceJobId:origin?.id,scheduleId:origin?.scheduleId,scheduleRunId:origin?.scheduleRunId,botId:owner.bot.id,sessionId:ctx?.sessionId,title:checked.title,view:checked.view,status:checked.interactive?'pending':'displayed',at:new Date().toISOString()};
   const edit=new StateEdit();
   if(checked.interactive)for(const prior of team.state.views||[])if(prior.botId===record.botId&&prior.status==='pending')edit.set(prior,'status','superseded');
   edit.append(team.state,'views',record);try{await team.save();}catch(error){edit.rollback();throw error;}
@@ -61,7 +62,7 @@ async function deliverView(team,record){
 async function deliverOnce(team,record){
   if(record.roomId||!team.state.bots.some(bot=>bot.id===record.botId))throw Error('原 Bot 已不存在，未向其他聊天转发回答。');
   const source='view-'+record.id;
-  await team.submitMessage('bot',record.botId,replyOf(record),{clientMessageId:source,deliverySourceId:source,sourceUserContent:replyDisplay(record)});
+  await team.submitMessage('bot',record.botId,replyOf(record),{scheduleId:record.scheduleId,scheduleRunId:record.scheduleRunId,clientMessageId:source,deliverySourceId:source,sourceUserContent:replyDisplay(record)});
   // Keep the retry flag in memory if persisting the acknowledgement fails.
   record.deliveryPending=false;delete record.deliveryError;
   try{await team.save();}catch(error){record.deliveryPending=true;throw error;}

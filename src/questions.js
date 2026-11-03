@@ -31,11 +31,12 @@ async function deliverQuestion(team,question){
   const bot=team.bot(question.botId),room=question.roomId?team.room(question.roomId):null;
   if(room&&!room.members.includes(bot.id))throw Error('提问成员已离开原群聊，未向其他聊天转发回答。');
   if(room)groupWork.assertCurrent(team,room,question.groupEpoch??0);
+  const origin=team.state.jobs.find(j=>j.id===question.sourceJobId);
   const source='question-'+question.id,text='User answer to '+question.text+'\n'+question.answer;
-  if(bot.role==='Administrator'||room?.adminId===bot.id)await team.submitMessage(room?'room':'bot',room?.id||bot.id,text,{clientMessageId:source,...(room?{groupEpoch:question.groupEpoch??0}:{})});
+  if(bot.role==='Administrator'||room?.adminId===bot.id)await team.submitMessage(room?'room':'bot',room?.id||bot.id,text,{scheduleId:origin?.scheduleId,scheduleRunId:origin?.scheduleRunId,clientMessageId:source,...(room?{groupEpoch:question.groupEpoch??0}:{})});
   else if(!team.state.jobs.some(j=>j.deliverySourceId===source)){
-    const origin=team.state.jobs.find(j=>j.id===question.sourceJobId),batch=(team.state.workBatches||[]).find(b=>b.roomId===room?.id&&b.status==='running'&&b.jobIds.includes(origin?.id));
-    await admit(team,{room,bot,task:text,roundId:origin?.roundId,key:'question:'+question.id,options:{deliverySourceId:source,offRound:Boolean(room),...(room?{groupEpoch:question.groupEpoch??0}:{})},change:(edit,job)=>{edit.set(question,'deliveryJobId',job.id);if(batch)edit.append(batch,'jobIds',job.id);}});
+    const batch=(team.state.workBatches||[]).find(b=>b.roomId===room?.id&&b.status==='running'&&b.jobIds.includes(origin?.id));
+    await admit(team,{room,bot,task:text,roundId:origin?.roundId,key:'question:'+question.id,options:{scheduleId:origin?.scheduleId,scheduleRunId:origin?.scheduleRunId,deliverySourceId:source,offRound:Boolean(room),...(room?{groupEpoch:question.groupEpoch??0}:{})},change:(edit,job)=>{edit.set(question,'deliveryJobId',job.id);if(batch)edit.append(batch,'jobIds',job.id);}});
   }
   await team.save();question.deliveryPending=false;delete question.deliveryError;await team.save();
 }

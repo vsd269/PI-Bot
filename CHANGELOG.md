@@ -1,5 +1,37 @@
 # 更新记录
 
+## 0.3.93 — 2026-11-03
+
+- Added Apps catalog with source-aligned category sections, real service logos, search and pagination.
+- Each user supplies their own Composio project key, stored in the local encrypted vault. No shared PI Bot authorization server.
+- Connect accounts through official authorization pages; grant access to multiple selected Bots or all Bots, and revoke access locally before remote disconnection.
+- Added scoped app-tool discovery/execution with native PI approvals, verified toolkit/account binding and no automatic retry of writes.
+- Retained sidebar resizing, right-panel transitions and the titlebar drag-region fixes from 0.3.92.
+
+
+## 0.3.92
+
+- 修复左侧拖动条未跟随侧栏实际宽度，导致调整后无法继续拖动的问题；支持连续拖动、键盘调整及宽度记忆。
+- 右侧会话详情新增宽度拖动手柄，支持 260–520 像素范围调整和宽度记忆；聊天区预留空间按实际宽度变化，窄窗口保持自动折叠／覆盖规则。
+- 修复原生工作区收起时插件提前覆盖动画的问题，跟随宿主实际伸缩过程；留出原生工作区拖动边，不拦截其宽度调整。
+- 顶栏增加独立拖窗区域，避开原生窗口控制按钮，并随侧栏折叠、宽度和工作区布局更新。
+- 保留系统减少动态效果偏好，补充连续拖动、快速开合、窄窗口、原生工作区和拖窗区域回归检查。
+- 包含 0.3.91 的任务分派修复与任务追踪等更新。应用授权后台与应用目录迁移尚在评估，本版不新增第三方服务计费。
+
+## 0.3.91
+
+- 相关修复见 [Issue #1](https://github.com/vsd269/PI-Bot/issues/1)，感谢 [@royrao2007](https://github.com/royrao2007) 提供详细复现与改进建议；本版本改动随 0.3.93 合并发布。
+- 修复管理员重复分派同一 Bot、JSON 字符串含未转义换行时整轮任务失败的问题。格式可安全修正时直接修正，计划校验失败最多纠正一次；保留原回复和具体原因，验证完整计划后才派发。覆盖群聊、管理员私聊和结果回收。
+- 活跃任务保持原有观察频率；空闲时减少检查，无变化不再重复保存整个团队状态。任务准入、停止和恢复仍确认保存结果。
+- 定时任务增加稳定执行编号、最终状态及子任务关联，区分执行、等待、完成、失败和中断；上一轮未结束时跳过下一轮，旧版本仅派发记录标为结果未知。
+- 同工具、同参数、同错误连续出现时增加待处理提示；不因普通长任务、审批等待或成功截图重复而自动停止，可在待处理中手动停止对应任务。
+- 新增本地文件条件等待：指定工作目录内文件出现或大小／修改时间变化后再执行，支持到期和取消，触发与任务领取一起保存。等待时不调用模型，触发后执行仍可能产生模型费用。
+- 自动记忆增加用户原话匹配；过滤缺失证据、假设、问句与常见引用文本，记忆面板可查看原话并定位聊天。此为保守来源校验，不是独立事实认证。
+- 待处理增加工作摘要：查看工具次数、已保存结果和证据范围；缺失文件核对信息明确显示未核对。
+- 新增团队配置模板：预览导入／导出角色分工和群结构，技能只保留参考名称，周期任务导入后暂停；不携带聊天、记忆、密钥、授权、账户和工作目录，默认排除私密 Bot。
+- 加强进程锁身份核验，降低旧 PID 被其他程序重用导致误阻止启动的可能；未知身份或异常回收锁仍保守保留，避免抢占正在使用的数据。
+- 统一交接来源标记，队友报告与原始任务分开，不把队友声称的批准当成用户授权。
+
 ## 0.3.90
 
 - 群聊工作时原发送键切换成方块停止键，不另加按钮；停止过程即时反馈，失败可重试，保留输入草稿且不影响其他聊天。

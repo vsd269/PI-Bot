@@ -1,7 +1,10 @@
+import {mountFileWaits,mountTeamTemplates,RUN_LABELS} from './work-settings.mjs';
 import {mountCapabilityAssignment} from './capability-assignment.mjs';
 import {createExtensions} from './extensions.mjs';
 import {mountSkillImport} from './skill-import.mjs';
-import {el} from './dom.mjs';
+import {el,icon} from './dom.mjs';
+import {createApps} from './apps.mjs';
+import {appArtwork} from './app-catalog.mjs';
 import {createAdvanced} from './advanced.mjs';
 import {createAttention} from './attention.mjs';
 import {createSettingsShell} from './settings-shell.mjs';
@@ -101,12 +104,12 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
   async function schedules(editing,botId){
     const token=show('定时任务',{page:'schedules'});info('需要 PI-Desktop 保持运行、插件启用，并选中创建任务时的工作区。关闭期间不会连续补跑重复任务；派发中断时暂停并提示检查。');
     const view=await call('team.schedules');if(token!==generation)return;
-    const state=getState();for(const task of view.tasks.filter(task=>!botId||task.targetKind==='bot'&&task.targetId===botId)){
-      const card=el('section','','feature-card');card.append(el('strong',task.title),el('p',task.prompt),el('small',(task.enabled?'启用':'暂停')+' · '+task.status+' · 下次：'+(task.nextAt?new Date(task.nextAt).toLocaleString():'无')));
+    const state=getState();await mountFileWaits({body,call,getState,notice,isCurrent:()=>token===generation,refresh:()=>schedules(),selectChat});if(token!==generation)return;for(const task of view.tasks.filter(task=>!botId||task.targetKind==='bot'&&task.targetId===botId)){
+      const card=el('section','','feature-card');card.append(el('strong',task.title),el('p',task.prompt),el('small',(task.enabled?'启用':'暂停')+' · '+(RUN_LABELS[task.status]||task.status)+' · 下次：'+(task.nextAt?new Date(task.nextAt).toLocaleString():'无')));
       if(task.error)card.append(el('p',task.error,'message-error'));
       card.append(el('p','工作区：'+task.workspace,'feature-note'),button('编辑',()=>schedules(task)),button(task.enabled?'暂停':'启用',async()=>{await call('team.schedule.toggle',{id:task.id,enabled:!task.enabled});await schedules();}));
       const remove=button('删除',async()=>{if(remove.dataset.confirm!=='yes'){remove.dataset.confirm='yes';remove.textContent='再次点击确认删除';return;}await call('team.schedule.delete',{id:task.id});await schedules();});card.append(remove);
-      if(task.runs?.length){const details=el('details');details.append(el('summary','最近派发记录'));for(const run of task.runs.slice(-10).reverse())details.append(el('p',new Date(run.at).toLocaleString()+' · '+run.status+(run.error?' · '+run.error:'')));card.append(details);}body.append(card);
+      if(task.runs?.length){const details=el('details');details.append(el('summary','最近执行记录（派发不等于完成）'));for(const run of task.runs.slice(-10).reverse())details.append(el('p',new Date(run.at).toLocaleString()+' · '+(RUN_LABELS[run.status]||run.status)+(run.error?' · '+run.error:'')));card.append(details);}body.append(card);
     }
     if(!editing){const create=button('新建定时任务',()=>schedules('new',botId));create.className='bt-soft bt-soft-sm';body.append(create);if(!view.tasks.length){const empty=el('div','','bt-us-empty');empty.append(el('strong','还没有定时任务'),el('span','为 Bot 或群聊安排一项任务。'));body.append(empty);}return;}
     body.append(el('h3',editing?.id?'编辑任务':'新建任务'));
@@ -117,7 +120,7 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
     const days=el('fieldset');days.append(el('legend','星期'));for(let n=1;n<=7;n++){const cb=el('input');cb.type='checkbox';cb.value=n;cb.checked=(editing?.when?.weekdays||[1]).includes(n);days.append(label(['','一','二','三','四','五','六','日'][n],cb));}
     const timing=()=>{when.replaceChildren();if(kind.value==='at')when.append(label('日期和时间',at));else if(kind.value==='every')when.append(label('每隔多少分钟',minutes));else{when.append(label('时刻',time),label('时区',zone));if(kind.value==='weekly')when.append(days);}};kind.onchange=timing;timing();
     const save=el('button',editing?.id?'保存修改':'创建任务','soft-button');save.type='submit';form.append(label('名称',name),label('发送给',target),label('任务内容',prompt),label('何时执行',kind),when,save);body.append(form);
-    form.onsubmit=async event=>{event.preventDefault();save.disabled=true;try{const [targetKind,targetId]=target.value.split(':');await call('team.schedule.save',{id:editing?.id,title:name.value,prompt:prompt.value,targetKind,targetId,when:{kind:kind.value,at:at.value?new Date(at.value).toISOString():null,time:time.value,minutes:Number(minutes.value),timeZone:zone.value,weekdays:[...days.querySelectorAll('input:checked')].map(i=>Number(i.value))}});await schedules();}catch{}finally{save.disabled=false;}};
+    form.onsubmit=async event=>{event.preventDefault();save.disabled=true;try{const [targetKind,targetId]=target.value.split(':');await call('team.schedule.save',{id:editing?.id,title:name.value,prompt:prompt.value,targetKind,targetId,when:{kind:kind.value,at:at.value?new Date(at.value).toISOString():null,time:time.value,minutes:Number(minutes.value),timeZone:zone.value,weekdays:[...days.querySelectorAll('input:checked')].map(i=>Number(i.value))}});await schedules();}catch(error){notice(error.message||'保存任务失败，请重试。');}finally{save.disabled=false;}};
   }
   async function history(query=''){
     const token=show('搜索聊天记录'),form=el('form'),q=input('搜索消息内容',query);const search=el('button','搜索','soft-button');search.type='submit';form.append(q,search);body.append(form);
@@ -144,7 +147,7 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
       clearTimeout(memoryTimer);const view=await call('team.memory.view',{...target,summarize:true,regenerate});if(token!==generation||!dialog.open)return;
       summary.replaceChildren(el('strong','记忆摘要'),el('p',view.summary?.text||(view.summarizing?'正在生成摘要…':'尚无摘要。')));if(view.error)summary.append(el('p',view.error,'message-error'));
       summary.append(el('small',group?'本群 '+view.sizes.group+' / '+view.limits.main+' 字符':'机器人 '+view.sizes.own+' / '+view.limits.main+' 字符；团队 '+view.sizes.team+' 字符'));
-      entries.replaceChildren();for(const entry of view.entries){const row=el('section','','feature-card');row.append(el('small',({team:'团队',group:'本群',own:'机器人'}[entry.scope]||'机器人')+(entry.topic?' · '+entry.topic:'')+' · '+(entry.added||'')),el('p',entry.text));const remove=button('删除',async()=>{if(remove.dataset.confirm!=='yes'){remove.dataset.confirm='yes';remove.textContent='确认删除';return;}await call('team.memory.forget',{...target,scope:entry.scope,text:entry.text,topic:entry.topic});await draw();});row.append(remove);entries.append(row);}
+      entries.replaceChildren();for(const entry of view.entries){const row=el('section','','feature-card');row.append(el('small',({team:'团队',group:'本群',own:'机器人'}[entry.scope]||'机器人')+(entry.topic?' · '+entry.topic:'')+' · '+(entry.added||'')),el('p',entry.text));if(entry.source)row.append(el('small','来源：'+entry.source));if(entry.evidence){row.append(el('p','原话：'+entry.evidence,'feature-note'),button('查看原话',async()=>{const result=await call('team.history.search',{query:entry.evidence,kind:group?'room':'bot',id:bot.id});const match=result.results?.find(r=>r.who==='User');if(!match){notice('原话可能已归档或清理，请按来源记录核对。');return;}selectChat(match.kind,match.targetId,match.lineId);dialog.close();}));}const remove=button('删除',async()=>{if(remove.dataset.confirm!=='yes'){remove.dataset.confirm='yes';remove.textContent='确认删除';return;}await call('team.memory.forget',{...target,scope:entry.scope,text:entry.text,topic:entry.topic});await draw();});row.append(remove);entries.append(row);}
       if(!view.entries.length)entries.append(el('p','尚无记忆。'));
       if(view.summarizing)memoryTimer=setTimeout(()=>draw().catch(()=>{}),1200);
     };
@@ -156,6 +159,7 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
     const token=show('备份与恢复');
     info('更新保留原配置；卸载重装时，从独立备份找回 Bot、群聊、头像、记忆和插件聊天记录。自动保留最近 30 份备份。');
     const view=await call('team.backup',{action:'status'});if(token!==generation)return;
+    mountTeamTemplates({body,call,notice,isCurrent:()=>token===generation,download,update,getState});
     info('本机独立备份：'+view.path);
     if(view.error)info('备份异常：'+view.error);
     if(view.recovered)info('本次启动已恢复：'+view.recovered.reason);
@@ -203,9 +207,10 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
   }
   async function plugins(){return capabilities();}
   function about(){show('关于 PI-bot');info('PI Bot 0.3.78 · 面向 PI-Desktop 插件接口适配。对照上游 0.1.7：Fei2411 / DeepSeek-Bot，保留原许可证和来源记录。');info('PI 适配保留自定义头像、侧栏入口和“PI 原生界面”返回入口。群聊保留串行与并行；主机器人可选只规划分派或在私聊直接执行。');info('使用 PI 原生 Agent 的上下文压缩和工具审批。新增按 Bot 授权的本地 MCP、Windows 加密密钥库、加密密钥迁移及任务恢复中心。MCP 授权约束本插件桥接入口，PI 原生全局工具仍由 PI 管理。恢复依据会话记录，不是执行中途的进程快照。扩展功能包含每 Bot 独立 Edge/Chrome 浏览器、语音转写与系统朗读、Windows OCR、完整会话索引和本机 Bot API。专属命令工具支持密钥环境变量；PI 原生 shell 保持由客户端管理。');const diagnostics=getState().diagnostics||[];body.append(button('导出诊断（不含聊天正文）',()=>download('PI-bot-diagnostics.json',JSON.stringify(diagnostics,null,2),'application/json')));}
+  const apps=createApps({app,call,getState,avatar,onMcp:()=>pages.open('connectors'),onChanged:accounts=>{const marks=app.querySelector('.pi-connected-apps');if(marks){marks.replaceChildren();for(const slug of [...new Set(accounts.map(a=>a.slug))].slice(0,3)){const m=el('span');m.title=slug;const art=appArtwork({slug});if(art.logo||art.domain){const img=el('img');img.alt='';img.referrerPolicy='no-referrer';img.src=art.logo||'https://www.google.com/s2/favicons?domain='+encodeURIComponent(art.domain)+'&sz=64';m.append(img);}else m.append(icon('ConnectorIcon'));marks.append(m);}}}});
   const attention=createAttention({body,show,call,isCurrent:token=>token===generation&&dialog.open,selectChat,close:()=>dialog.close(),notice,recovery:advanced.recovery});
-  const pages=createSettingsPages({body,show,call,getState,update,savePreferences,notice,onNative:goNative,download,editEntity,avatar,cluster,isCurrent:token=>token===generation&&dialog.open,legacy:{preferences,capabilities,schedules,secrets:advanced.secrets,mcp:advanced.mcp,recovery:advanced.recovery,backups,extensions:extensions.extensions,history}});
-  return {...advanced,...extensions,plugins,preferences:()=>pages.open('general'),connectors:()=>pages.open('connectors'),capabilities,usage:options=>pages.open('usage',options),schedules,secrets:botId=>pages.open('secrets',{botId}),history,archivedHistory,memory,backups,about:()=>pages.open('about'),settings:page=>pages.open(page||'general'),isSettingsOpen:shell.isOpen,presentEntity(kind,name,form,restore){show(name,{page:kind==='bot'?'bots':'groups',move:'in',back:()=>pages.open(kind==='bot'?'bots':'groups')});const wrap=el('div','','bt-settings-form');wrap.append(form);body.append(wrap);disposeBody=restore;},close(){extensions.dispose();shell.dispose();}};
+  const pages=createSettingsPages({body,show,call,getState,update,savePreferences,notice,onNative:goNative,download,editEntity,avatar,cluster,isCurrent:token=>token===generation&&dialog.open,legacy:{apps:()=>{dialog.close();return apps.open();},preferences,capabilities,schedules,secrets:advanced.secrets,mcp:advanced.mcp,recovery:advanced.recovery,backups,extensions:extensions.extensions,history}});
+  return {...advanced,...extensions,apps:()=>apps.open(),plugins,preferences:()=>pages.open('general'),connectors:()=>pages.open('connectors'),capabilities,usage:options=>pages.open('usage',options),schedules,secrets:botId=>pages.open('secrets',{botId}),history,archivedHistory,memory,backups,about:()=>pages.open('about'),settings:page=>pages.open(page||'general'),isSettingsOpen:shell.isOpen,presentEntity(kind,name,form,restore){show(name,{page:kind==='bot'?'bots':'groups',move:'in',back:()=>pages.open(kind==='bot'?'bots':'groups')});const wrap=el('div','','bt-settings-form');wrap.append(form);body.append(wrap);disposeBody=restore;},close(){apps.close();extensions.dispose();shell.dispose();}};
 }
 function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function localISO(date){const pad=n=>String(n).padStart(2,'0');return date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate())+'T'+pad(date.getHours())+':'+pad(date.getMinutes());}

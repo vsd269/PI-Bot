@@ -4,6 +4,16 @@ Persistent Bot teams for **PI Desktop**. [简体中文](README.md)
 
 PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DS Bot distribution, and it does not claim complete feature parity.
 
+## New in 0.3.93
+
+This release combines 0.3.91–0.3.93. See the [full release notes](docs/GITHUB-RELEASE-0.3.93.md). Fixes [#1](https://github.com/vsd269/PI-Bot/issues/1); thanks [@royrao2007](https://github.com/royrao2007) for the detailed report and suggestions.
+
+Adds a source-aligned Apps catalog with service logos, categories, search and pagination. Each user supplies a personal Composio project key, authorizes accounts on official pages, and explicitly grants access to selected Bots or all Bots. Credentials and project configuration use the local Windows encrypted vault. Existing GitHub PAT and MCP integrations remain available. Sidebar resize, panel motion and titlebar drag-region fixes are included. Real third-party account authorization still requires user acceptance testing. See [setup and limits](docs/RELEASE-0.3.93.md).
+
+## New in 0.3.91
+
+Fixes administrator plan parsing and bounded correction, adds schedule-run lifecycle tracking, local file conditions, quoted memory evidence, work receipts and configuration-only team templates. Idle polling and unchanged state saves are reduced without weakening durable admission. Templates exclude chats, memory, keys, grants and local folders; schedules import paused and skills remain unassigned. File waits require the app to keep running. See [entry points and limits](docs/RELEASE-0.3.91.md).
+
 ## New in 0.3.90
 
 Persist-before-execute admission now covers continuations, answered questions, result delivery, manual recovery and group batches. Group results return through the existing planner session; unanswered questions block collection, and unknown or interrupted submissions are not replayed blindly. Automatic follow-up is limited to two additional batches and does not run for a normal greeting.
@@ -68,7 +78,7 @@ The package and SHA-256 file are created under `dist/`. The native installer req
 
 ## Boundaries
 
-Bring your own PI model configuration, cloud speech credentials and application accounts. Services may incur charges. Notion and email need compatible MCP services and authorization; a configuration entry is not a verified account connection. Schedules require the client to remain running. Recovery uses saved sessions and is not an arbitrary mid-tool process checkpoint. Windows credentials are encrypted for the current OS user and require encrypted export for transfer.
+Bring your own PI model configuration, cloud speech credentials and application accounts. Services may incur charges. Applications can use the user-owned Composio project or compatible MCP services; catalog entries are not verified account connections. Schedules require the client to remain running. Recovery uses saved sessions and is not an arbitrary mid-tool process checkpoint. Windows credentials are encrypted for the current OS user and require encrypted export for transfer.
 
 Tests use synthetic data and mocks where applicable. Real model, microphone, OAuth and browser behavior depends on your environment. Do not publish credentials, private chats or team backups in an issue.
 

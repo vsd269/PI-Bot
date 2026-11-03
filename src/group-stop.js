@@ -12,6 +12,7 @@ async function stop(team,id){
   const jobs=team.state.jobs.filter(j=>j.roomId===id&&team.active(j));
   for(const job of jobs){job.cancelled=true;job.groupStopped=true;}
   for(const report of room.reports||[])if(!report.replyDelivered){report.cancelled=true;report.groupStopped=true;report.error='用户已停止本群工作。';report.status='aborted';}
+  for(const task of team.state.schedules||[])for(const run of task.runs||[])for(const plan of run.plans||[])if(plan.roomId===id&&plan.status==='pending')plan.status='cancelled';
   room.pausedRelays=[];room.relayCount=0;delete room.relayNoticeCount;delete room.relayGuard;
   for(const line of room.log||[])if(line.planning&&line.progress)Object.assign(line,{text:'已停止本轮任务分派。',progress:false,planning:false,status:'aborted'});
   const run=(async()=>{

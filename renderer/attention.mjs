@@ -12,7 +12,9 @@ export function createAttention({body,show,call,isCurrent,selectChat,close,notic
       if(row.task)card.append(el('p',row.task));
       if(row.botId||row.roomId)controls.append(action('打开原聊天',()=>{selectChat(row.roomId?'room':'bot',row.roomId||row.botId);close();}));
       if(row.sessionId)controls.append(action('打开原生会话',()=>call('team.session.open',{sessionId:row.sessionId})));
-      if(['job','delivery','batch'].includes(row.kind))controls.append(action('核对与恢复',()=>recovery()));
+      if(['job','delivery','batch','tool_loop','schedule_run'].includes(row.kind))controls.append(action('核对与恢复',()=>recovery()));
+      if(['completed','job','tool_loop','delivery'].includes(row.kind))controls.append(action('工作摘要',async()=>{const result=await call('team.recovery',{action:'receipt',jobId:row.sourceId});if(!card.isConnected)return;card.querySelector('.work-receipt')?.remove();const detail=el('div','','work-receipt');detail.append(el('p',result.verification),el('p','工具调用：'+result.toolCalls+' 次；保留事件：'+result.observedEvents+(result.evidenceLimited?'（记录有截断）':'')),el('p',result.files));for(const tool of result.tools)detail.append(el('p',tool.name+' · '+tool.calls+' 次 · 失败 '+tool.failures+' 次'));if(result.warning)detail.append(el('p',result.warning.message));if(result.result){const d=el('details');d.append(el('summary','已保存结果（最多最后 12000 字）'),el('pre',result.result));detail.append(d);}card.append(detail);}));
+      if(row.kind==='tool_loop'&&row.active)controls.append(action('停止此任务',async()=>{await call('team.job.cancel',{jobId:row.sourceId});notice('已请求停止对应任务。');await open(category,offset);}));
       if(row.kind==='store'){
         card.append(el('p','当前插件副本：'+row.localCopy),el('p','外部副本：'+row.externalCopy));
         const keep=action('保留当前插件数据',async()=>{if(keep.dataset.confirm!=='yes'){keep.dataset.confirm='yes';keep.dataset.restLabel='再次点击确认保留';notice('请核对数据目录里的双方副本，再次点击以保留当前插件数据；未完成任务会暂停。');return;}const saved=await call('team.attention',{action:'resolve_store',confirm:true});notice(saved.note);await open('issues');});controls.append(keep);

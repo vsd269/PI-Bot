@@ -4,13 +4,13 @@ import {icon} from './dom.mjs';
 export function attachWorkspaceSidebar(root,{prepare=async()=>{},onError=()=>{},onLayout=()=>{}}={}){
   const header=root.shadowRoot.querySelector('.conversation-header'),button=document.createElement('button');
   button.type='button';button.className='bt-round pi-workspace-toggle';button.setAttribute('aria-label','展开工作区与终端');button.title='工作区与终端';button.append(icon('SidePanelIcon'));button.hidden=true;header.querySelector('.pi-header-actions').append(button);
-  let active=false,requested=false,stopped=false,frame=0,panel,generation=0;
+  let active=false,requested=false,closing=false,stopped=false,frame=0,panel,generation=0;
   const native=()=>document.querySelector('.app-shell .app-work-panel-toggle');
   // PI hides presentation on Settings/Plugins/Scheduled even when a session
   // exists and aria-pressed is true. These are public rendered route markers.
   const routeBlocked=()=>!!document.querySelector('.app-shell.settings-mode,.app-shell .app-chat-shell[hidden],.app-shell .main-pane > .main-titlebar');
-  const visiblePanel=()=>{
-    const node=document.querySelector('.app-shell .work-panel:not(.is-exiting):not(.is-exit-pending)');
+  const visiblePanel=(includeExiting=false)=>{
+    const node=document.querySelector(includeExiting?'.app-shell .work-panel':'.app-shell .work-panel:not(.is-exiting):not(.is-exit-pending)');
     if(!node||node.closest('[hidden],[inert]'))return null;
     const box=node.getBoundingClientRect();
     return box.width>0&&box.height>0&&getComputedStyle(node).visibility!=='hidden'?node:null;
@@ -18,11 +18,11 @@ export function attachWorkspaceSidebar(root,{prepare=async()=>{},onError=()=>{},
   const resize=new ResizeObserver(schedule);
   function update(){
     frame=0;if(stopped)return;button.hidden=!native();
-    const next=visiblePanel();if(next!==panel){resize.disconnect();panel=next;if(panel)resize.observe(panel);}
-    const box=panel?.getBoundingClientRect(),shown=active&&requested&&box?.left>0;
-    const width=shown?Math.round(box.left)+'px':'100%';if(root.style.width!==width){root.style.width=width;onLayout();}
+    const next=visiblePanel(true);if(next!==panel){resize.disconnect();panel=next;if(panel)resize.observe(panel);}if(!panel)closing=false;
+    const box=panel?.getBoundingClientRect(),shown=active&&(requested||closing)&&box?.left>0;
+    const width=shown?Math.max(0,Math.round(box.left)-5)+'px':'100%';if(root.style.width!==width){root.style.width=width;onLayout();}
     root.shadowRoot.querySelector('.pi-bot-app').toggleAttribute('data-native-workspace',!!shown);
-    button.setAttribute('aria-expanded',String(!!shown));button.setAttribute('aria-label',shown?'收起工作区与终端':'展开工作区与终端');
+    button.setAttribute('aria-expanded',String(!!shown&&requested));button.setAttribute('aria-label',shown&&requested?'收起工作区与终端':'展开工作区与终端');
     if(shown&&panel.getAnimations().some(animation=>animation.playState==='running'))schedule();
   }
   function schedule(){if(!stopped&&!frame)frame=requestAnimationFrame(update);}
@@ -41,7 +41,7 @@ export function attachWorkspaceSidebar(root,{prepare=async()=>{},onError=()=>{},
     try{
       let control=native();if(!control)throw Error('当前 PI 版本没有可用的工作区侧栏入口。');
       if(requested&&visiblePanel()){
-        requested=false;if(control.getAttribute('aria-pressed')==='true')control.click();schedule();return;
+        requested=false;closing=true;if(control.getAttribute('aria-pressed')==='true')control.click();schedule();return;
       }
       // Preserve the instant path on a ready Chat route. Recover the route
       // as well as the session when necessary, without fetching team.state.
@@ -54,7 +54,7 @@ export function attachWorkspaceSidebar(root,{prepare=async()=>{},onError=()=>{},
         control=native();
       }
       root.dispatchEvent(new CustomEvent('pi-bot:workspace-open'));
-      requested=true;
+      requested=true;closing=false;
       if(control.getAttribute('aria-pressed')!=='true')control.click();
       schedule();
       // Session/open is acknowledged before React finishes switching routes;
@@ -66,11 +66,11 @@ export function attachWorkspaceSidebar(root,{prepare=async()=>{},onError=()=>{},
     }catch(error){if(!stopped&&active&&generation===token){requested=false;schedule();onError(error.message);}}
     finally{button.disabled=false;button.removeAttribute('aria-busy');}
   };
-  const closeForDetails=()=>{if(requested){requested=false;generation++;const control=native();if(control?.getAttribute('aria-pressed')==='true')control.click();schedule();}};root.addEventListener('pi-bot:details-open',closeForDetails);
+  const closeForDetails=()=>{if(requested){requested=false;closing=true;generation++;const control=native();if(control?.getAttribute('aria-pressed')==='true')control.click();schedule();}};root.addEventListener('pi-bot:details-open',closeForDetails);
   const observer=new MutationObserver(schedule);observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','aria-pressed','disabled','hidden','inert']});
   window.addEventListener('resize',schedule);update();
   return {
-    setActive(value){active=value;if(!value){requested=false;generation++;}schedule();},
+    setActive(value){active=value;if(!value){requested=false;closing=false;generation++;}schedule();},
     close(){root.removeEventListener('pi-bot:details-open',closeForDetails);stopped=true;generation++;cancelAnimationFrame(frame);observer.disconnect();resize.disconnect();window.removeEventListener('resize',schedule);root.style.width='100%';button.remove();}
   };
 }

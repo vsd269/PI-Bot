@@ -34,7 +34,7 @@ async function delegate(team,room,job,ids,path){
       const key=job.id+':'+id;
       if(team.state.jobs.some(j=>j.relayKey===key)||room.pausedRelays.some(r=>r.key===key))continue;
       if(room.pausedRelays.length>=1000)throw Error('群聊待继续任务超过 1000 项，请先处理。');
-      room.pausedRelays.push({id:randomUUID(),key,botId:id,sourceJobId:job.id,task:'群聊成员 '+team.botName(job.botId)+' 向你交接任务：\n'+job.result,blocked:room.relayGuard.idle>=IDLE_RELAY_LIMIT,options:{attachments:job.attachments,referencesText:job.referencesText,offRound:true,fromBotId:job.botId,fromName:team.botName(job.botId),replyTo:job.botId,replyRoomId:room.id,hop:(job.hop||0)+1,mentionPath:path}});
+      room.pausedRelays.push({id:randomUUID(),key,botId:id,sourceJobId:job.id,task:'群聊成员 '+team.botName(job.botId)+' 向你交接任务：\n'+job.result,blocked:room.relayGuard.idle>=IDLE_RELAY_LIMIT,options:{scheduleId:job.scheduleId,scheduleRunId:job.scheduleRunId,attachments:job.attachments,referencesText:job.referencesText,offRound:true,fromBotId:job.botId,fromName:team.botName(job.botId),replyTo:job.botId,replyRoomId:room.id,hop:(job.hop||0)+1,mentionPath:path}});
     }
     job.delegated=true;
     try{await team.save();}catch(error){if(groupWork.current(team,room,job.groupEpoch??0)){room.pausedRelays=before;room.relayGuard=beforeGuard;delete job.delegated;}throw error;}
@@ -50,7 +50,7 @@ async function drain(team,room,resumed,generation=groupWork.epoch(room)){
     const existing=team.state.jobs.find(j=>j.relayKey===relay.key);
     if(existing){room.pausedRelays=room.pausedRelays.filter(r=>r!==relay);continue;}
     if(relay.blocked&&!resumed)continue;
-    const saved=relay.options,options={offRound:true,attachments:saved.attachments,referencesText:saved.referencesText,fromBotId:saved.fromBotId,fromName:saved.fromName,replyTo:saved.fromBotId,replyRoomId:room.id,hop:resumed?1:Math.min(40,Math.max(1,Number(saved.hop)||1)),mentionPath:resumed?[]:(Array.isArray(saved.mentionPath)?saved.mentionPath:[]).filter(id=>room.members.includes(id)).slice(0,40)};
+    const saved=relay.options,options={scheduleId:saved.scheduleId,scheduleRunId:saved.scheduleRunId,offRound:true,attachments:saved.attachments,referencesText:saved.referencesText,fromBotId:saved.fromBotId,fromName:saved.fromName,replyTo:saved.fromBotId,replyRoomId:room.id,hop:resumed?1:Math.min(40,Math.max(1,Number(saved.hop)||1)),mentionPath:resumed?[]:(Array.isArray(saved.mentionPath)?saved.mentionPath:[]).filter(id=>room.members.includes(id)).slice(0,40)};
     // The queued job and its relay key are persisted together; a retry finds it.
     const priorQueue=room.pausedRelays,priorCount=room.relayCount;
     try{

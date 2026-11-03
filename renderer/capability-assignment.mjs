@@ -15,7 +15,7 @@ export function mountCapabilityAssignment({body,items,getState,botId,save,isCurr
   choices(skillBox,'选择能力','全选能力','清空能力',()=>{for(const b of skillInputs){b.checked=true;selectedSkills.add(b.value);}changed();},()=>{selectedSkills.clear();for(const b of skillInputs)b.checked=false;changed();});
   for(const bot of getState().bots){
     const check=el('input'),row=el('label','','pi-assignment-option');check.type='checkbox';check.value=bot.id;check.checked=selectedBots.has(bot.id);check.setAttribute('aria-label','分配给 '+bot.name);
-    check.onchange=()=>{check.checked?selectedBots.add(bot.id):selectedBots.delete(bot.id);changed();};row.append(check,el('span',bot.name));botBox.append(row);botInputs.push(check);
+    check.onchange=()=>{check.checked?selectedBots.add(bot.id):selectedBots.delete(bot.id);changed();};row.append(check,el('span',bot.name));if(bot.templateSkillReferences?.length)row.append(el('small','模板建议（需自行导入并分配）：'+bot.templateSkillReferences.join('、')));botBox.append(row);botInputs.push(check);
   }
   for(const item of items){
     const check=el('input'),row=el('label','','pi-assignment-option'),copy=el('span','','pi-assignment-copy'),count=el('small','','pi-assignment-count');check.type='checkbox';check.value=item.name;check.setAttribute('aria-label','分配能力 '+item.name);

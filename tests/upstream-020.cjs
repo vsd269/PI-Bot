@@ -40,7 +40,7 @@ test('removed member cannot recall or write the previous group memory',async ctx
   const wrote=await t.memory.tools.get('remember').execute({text:'不应保存的成员记录。'},{agent:{id:'native-A'}});assert(!/^Saved to/.test(wrote));assert.equal(t.memory.section(t.bot('worker'),'native-A'),'');
 });
 test('automatic group review writes group only and runs with group model accounting',async ctx=>{
-  const t=await fixture(ctx,{memory:true,review:true});t.modelReply=JSON.stringify({changes:[{op:'add',text:'项目甲的验收要求为中文报告。',team:true}]});
+  const t=await fixture(ctx,{memory:true,review:true});t.modelReply=JSON.stringify({changes:[{op:'add',text:'项目甲的验收要求为中文报告。',team:true,evidence:'以后本群的验收都使用中文报告。'}]});
   t.state.rooms[0].log.push({who:'User',text:'以后本群的验收都使用中文报告。',at:new Date().toISOString()});t.memory.groupStatus(t.state.rooms[0],'admin','running');t.memory.groupStatus(t.state.rooms[0],'admin','idle');await wait(30);await t.memory.rt.drainMemory();
   assert.equal((await t.memory.endpoint('memory-view',{roomId:'roomA'})).entries.length,1);assert.equal((await t.memory.view('admin')).entries.length,0);assert.equal(t.modelCalls[0].scope.roomId,'roomA');
 });

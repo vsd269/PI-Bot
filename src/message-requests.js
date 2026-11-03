@@ -65,7 +65,7 @@ async function dispatchMessageBot(team,args,owner,ctx){
       await team.save();await team.admitBotMessage();
       if(team.stopped||ctx.signal?.aborted)throw Error('PI-bot is stopping.');
       if(source?.cancelled)throw groupWork.stoppedError();if(owner.room)groupWork.assertCurrent(team,owner.room,ctx.groupEpoch??groupWork.epoch(owner.room));
-      const options={...(owner.room?{groupEpoch:ctx.groupEpoch??groupWork.epoch(owner.room),replyGroupEpoch:ctx.groupEpoch??groupWork.epoch(owner.room)}:{}),id:record.jobId,messageRequestKey:key,attachments:source?.attachments,referencesText:source?.referencesText,fromBotId:owner.bot.id,fromName:owner.bot.name,replyTo,sourceSessionId:ctx.sessionId,replyRoomId:owner.room?.id,...(parent?{parentJobId:parent.id}:{})};
+      const options={...(owner.room?{groupEpoch:ctx.groupEpoch??groupWork.epoch(owner.room),replyGroupEpoch:ctx.groupEpoch??groupWork.epoch(owner.room)}:{}),scheduleId:source?.scheduleId,scheduleRunId:source?.scheduleRunId,id:record.jobId,messageRequestKey:key,attachments:source?.attachments,referencesText:source?.referencesText,fromBotId:owner.bot.id,fromName:owner.bot.name,replyTo,sourceSessionId:ctx.sessionId,replyRoomId:owner.room?.id,...(parent?{parentJobId:parent.id}:{})};
       let result;
       if(planner){
         // Planner completions have no worker job; never pretend they have a checkpoint.

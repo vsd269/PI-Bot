@@ -1,3 +1,4 @@
+import {validEvidence} from '../memory-evidence.mjs'
 // Memory: what a Bot keeps across all its conversations, as Markdown in the Agent
 // Memory Repo format (github.com/AgentMemoryRepo/agentmemoryrepo): one entry per
 // bullet line ending in `[key: value; …]` metadata, and a MEMORY.md entry point whose
@@ -383,6 +384,7 @@ const reviewSystem = ({ teamWrites = false, group = false } = {}) => [
   '- keys, passwords, tokens, ID or card numbers, even when the user gives them.',
   '- what an entry already says, and what the user\'s project files (such as AGENTS.md) already say: every Session reads those files again.',
   'Change an entry with edit when the user says it changed or is no longer true, and remove one that the messages show was wrong or was only for one task. Never add an entry that contradicts another.',
+  'Each change must include evidence: an exact, unmodified 4-600 character excerpt from a new user statement. Do not cite Bot text, quoted/pasted text, questions or hypotheticals. Without supporting user evidence, return no change. This applies to add, edit and remove.',
   'Each change is one of',
   '  {"op": "add", "text": "…"}',
   ...(teamWrites ? ['  {"op": "add", "text": "…", "team": true}  for what every Bot on the team needs, such as how the user wants all work delivered'] : []),
@@ -1030,7 +1032,7 @@ export function install(rt) {
   const languageNow = () => rt.uiLanguage?.() ?? 'the language most entries are written in'
   const panelEntries = (files, scope) => allEntries(files).map(entry => ({
     scope, topic: entry.file.topic ?? null, text: entry.text,
-    added: entry.meta.added ?? null, by: entry.meta.by ?? null, source: entry.meta.source ?? null,
+    added: entry.meta.added ?? null, by: entry.meta.by ?? null, source: entry.meta.source ?? null, evidence: entry.meta.evidence ?? null,
   }))
 
   async function modelFor(bot) {
@@ -1300,7 +1302,7 @@ export function install(rt) {
       const scope = op === 'add' ? (change.team === true && team ? TEAM : home) : target?.scope === 'team' ? TEAM : home
       const label = labelOf(scope, keeper.id)
       const text = cleanEntry(change?.text)
-      const meta = { source, ...(scope.kind === 'team' ? { by: keeper.name } : {}), added: today() }
+      const meta = { source, evidence: change.evidence, ...(scope.kind === 'team' ? { by: keeper.name } : {}), added: today() }
       try {
         if (op !== 'add' && target === undefined) continue
         if (scope.kind === 'team' && !team) continue
@@ -1346,12 +1348,13 @@ export function install(rt) {
     const bot = rt.botOf(reviewOf(seen.sessionId)?.botId ?? seen.botId)
     if (bot === undefined) return
     const since = cursorsNow()[seen.key]
+    const privateAtStart = rt.isPrivate?.(bot.id)
     await reviewBatch({
       key: seen.key, since, batch: await chatBatch(seen.sessionId, bot, since),
       keeper: bot, name: bot.name, home: ownScope(bot.id), teamWrites: () => writesTeam(bot.id),
       who: `The Bot: ${bot.name}${bot.role ? `, ${bot.role}` : ''}.`,
       tag: { sessionId: rt.chatOf(bot.id), kind: 'memory' },
-      alive: () => rt.botOf(bot.id) !== undefined,
+      alive: () => rt.botOf(bot.id) === bot && rt.isPrivate?.(bot.id) === privateAtStart,
       next: () => queueReview(seen),
     })
   }
@@ -1411,7 +1414,7 @@ export function install(rt) {
       if (proposed === undefined) throw new Error('the model did not return a readable list of memory changes; original lines retained')
       const rejected = []
       const changes = proposed.filter((change, index) => {
-        const bad = !wellFormed(change) || change.op !== 'add' && numbered[Number(change.entry) - 1] === undefined || change.op !== 'remove' && entryProblem(cleanEntry(change.text)) !== undefined || change.op === 'add' && typeof change.topic === 'string' && change.topic.trim() !== '' && cleanTopic(change.topic) === undefined
+        const bad = !wellFormed(change) || !validEvidence(change, read) || change.op !== 'add' && numbered[Number(change.entry) - 1] === undefined || change.op !== 'remove' && entryProblem(cleanEntry(change.text)) !== undefined || change.op === 'add' && typeof change.topic === 'string' && change.topic.trim() !== '' && cleanTopic(change.topic) === undefined
         if (bad) rejected.push(index + 1)
         return !bad
       })
