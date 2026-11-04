@@ -40,6 +40,11 @@ const tick=()=>new Promise(r=>setImmediate(r));
   team.save=goodSave;
   await Promise.all([team.preferences({appearance:'light',compact:true}),team.preferences({appearance:'dark',theme:'paper',compact:true})]);
   assert.equal(JSON.parse(await fs.readFile(team.file,'utf8')).prefs.appearance,'dark');assert.equal(team.state.prefs.theme,'paper');
+  const profile='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJZ0AAAAASUVORK5CYII=';
+  const savedProfile=await team.preferences({profileAvatar:profile,compact:true});assert.equal(savedProfile.prefs.profileAvatar,profile);assert.equal(JSON.parse(await fs.readFile(team.file,'utf8')).prefs.profileAvatar,profile);assert(Buffer.byteLength(JSON.stringify(savedProfile))<64000);
+  for(const profileAvatar of ['https://example.com/avatar.png','data:image/svg+xml;base64,PHN2Zy8+','data:image/png;base64,<script>',123,'data:image/png;base64,'+'A'.repeat(36000)]){await assert.rejects(team.preferences({profileAvatar,theme:'mono',compact:true}));assert.equal(team.state.prefs.theme,'paper');assert.equal(team.state.prefs.profileAvatar,profile);}
+  team.save=async rollback=>{rollback?.();throw Error('avatar write failed');};await assert.rejects(team.preferences({profileAvatar:null,compact:true}),/avatar write failed/);assert.equal(team.state.prefs.profileAvatar,profile);team.save=goodSave;
+  await team.preferences({profileAvatar:null,compact:true});assert.equal(team.state.prefs.profileAvatar,null);assert.equal(JSON.parse(await fs.readFile(team.file,'utf8')).prefs.profileAvatar,null);
   team.snapshot=()=>({legacy:true});assert.deepEqual(await team.preferences({motion:'quiet'}),{legacy:true});
  }finally{await fs.rm(dir,{recursive:true,force:true});}
  console.log('PASS: immediate paint, stale refresh protection, rapid choice coalescing, rollback, concurrent chat preservation, durable compact save, validation, serial writes and legacy response.');

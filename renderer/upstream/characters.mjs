@@ -50,6 +50,7 @@ export function lookOf(bot) {
   return {
     shape: hasShape(avatar.shape) ? shapeId(avatar.shape) : bot?.id ? defaultShape(String(bot.id)) : FALLBACK_SHAPE,
     image: avatar.image,
+    framing: avatar,
     color: colorOf(bot),
   }
 }

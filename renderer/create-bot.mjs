@@ -4,7 +4,7 @@ import {lookOf,MAIN_LOOK} from './upstream/characters.mjs';
 import {nameProblem} from './upstream/mentions.mjs';
 
 // The upstream CreateBot is a conversation pane, separate from Bot settings.
-export function createBotPage({host,getBots,models,create,onCreated,onOpen,onBack,notice}){
+export function createBotPage({host,getBots,models,create,onCreated,onOpen,onBack,notice,onLibrary}){
   const pane=el('section','','bt-create pi-create-bot');pane.hidden=true;
   pane.setAttribute('role','dialog');pane.setAttribute('aria-label','创建 Bot');
   const head=el('div','','bt-create-head'),back=el('button','','bt-icon-btn'),closeButton=el('button','','bt-icon-btn');
@@ -33,7 +33,7 @@ export function createBotPage({host,getBots,models,create,onCreated,onOpen,onBac
     notice('');onOpen();close();const token=revision;
     draft={role:'Worker',instructions:'',modelKey:'',avatar:{shape:MAIN_LOOK.shape},color:MAIN_LOOK.color};
     name.value=start;name.placeholder=fallback();model.replaceChildren();const option=el('option','使用 PI 默认模型');option.value='';model.append(option);model.disabled=false;
-    editor=avatarEditor({bot:draft,anchor:looks,onClose:()=>{},onError:message=>notice(message),onSave:patch=>{Object.assign(draft,patch);paint();}});
+    editor=avatarEditor({bot:draft,anchor:looks,onLibrary,onClose:()=>{},onError:message=>notice(message),onSave:patch=>{Object.assign(draft,patch);paint();}});
     editor.node.setAttribute('role','group');editor.node.setAttribute('aria-label','新 Bot 形象');looks.append(editor.node);
     pane.hidden=false;paint();body.scrollTop=0;name.focus();
     models().then(catalog=>{

@@ -19,6 +19,6 @@ export function createOutbox({send,onChange}){
       const accepted=new Set([...state.rooms.flatMap(r=>r.log||[]),...state.bots.flatMap(b=>b.chat||[]),...state.jobs,...(state.asides||[])].map(row=>row.clientMessageId).filter(Boolean));
       for(const id of accepted)entries.delete(id);
     },
-    lines(target){return [...entries.values()].filter(e=>e.target.kind===target?.kind&&e.target.id===target?.id).map(e=>({id:e.id,clientMessageId:e.id,who:'User',text:e.content,at:e.at,delivery:e.delivery,error:e.error}));}
+    lines(target){return [...entries.values()].filter(e=>e.target.kind===target?.kind&&e.target.id===target?.id).map(e=>({id:e.id,clientMessageId:e.id,who:'User',text:e.content,attachments:e.attachments,at:e.at,delivery:e.delivery,error:e.error}));}
   };
 }

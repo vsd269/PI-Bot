@@ -118,3 +118,18 @@ test('pending relays survive Team restart and are removed with a deleted Bot',as
 test('invalid aside action cannot silently cancel an active answer',async ctx=>{
   const t=await fixture(ctx),g=gate();t.pi.agent.complete=()=>g.promise;const card=await asides.ask(t,{botId:'a',question:'临时问题'});await assert.rejects(()=>asides.operate(t,{id:card.id,action:'invalid'}));assert.equal(t.state.asides[0].status,'answering');g.resolve({text:'正常回答'});await Promise.all([...t.background]);assert.equal(t.state.asides[0].status,'answered');
 });
+
+
+test('whole-image avatar framing survives both save paths and backup, rejecting invalid framing',async ctx=>{
+  const t=await fixture(ctx),avatar={image:'data:image/webp;base64,YQ==',zoom:2,focusX:.2,focusY:.8,crop:'rounded'};
+  const saved=await t.setAppearance({botId:'a',avatar});assert.deepEqual(saved.avatar,avatar);
+  await t.upsertBot({...t.bot('a'),name:'Framed Alpha',compact:true});assert.deepEqual(t.bot('a').avatar,avatar);
+  assert.deepEqual(JSON.parse(await fs.readFile(t.file,'utf8')).bots.find(b=>b.id==='a').avatar,avatar);
+  const backup=parseArchive((await new Backups(t).archive()).text);assert.deepEqual(backup.payload.team.bots.find(b=>b.id==='a').avatar,avatar);
+  for(const patch of [{zoom:NaN},{zoom:0},{focusY:1.1},{focusX:'0.5'},{crop:'triangle'}]){
+    await assert.rejects(t.setAppearance({botId:'a',avatar:{...avatar,...patch}}));assert.deepEqual(t.bot('a').avatar,avatar);
+  }
+  const save=t.save;t.save=async()=>{throw Error('disk full');};await assert.rejects(t.setAppearance({botId:'a',avatar:{...avatar,zoom:3}}),/disk full/);assert.deepEqual(t.bot('a').avatar,avatar);t.save=save;
+  t.avatars=await new AvatarLibrary(t).load();const shared=(await t.avatars.add({name:'Framed',image:avatar.image,thumbnail:avatar.image})).item;
+  const fromLibrary={...avatar,libraryId:shared.id};await t.setAppearance({botId:'a',avatar:fromLibrary});await t.upsertBot({...t.bot('a'),compact:true});assert.deepEqual(t.bot('a').avatar,fromLibrary);await assert.rejects(t.avatars.remove(shared.id),/正用于/);
+});

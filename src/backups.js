@@ -89,7 +89,7 @@ function pausedState(value){
   for(const batch of state.workBatches||[])if(['running','planning'].includes(batch.status)){batch.status='needs_review';batch.error='备份恢复后需要手动核对，未自动再次执行。';}
   for(const wait of state.fileWaits||[])if(wait.status==='waiting'){wait.status='cancelled';wait.error='备份恢复后不会自动触发，请重新创建文件等待。';}
   for(const task of state.schedules||[]){task.enabled=false;task.status='needs_review';task.error='已恢复配置，请检查工作区、时间后手动启用。';}
-  for(const question of state.questions||[]){question.deliveryPending=false;if(question.status==='pending')question.status='interrupted';}
+  for(const question of state.questions||[]){question.deliveryPending=false;if(question.status==='pending'&&!question.creationGreeting)question.status='interrupted';}
   for(const aside of state.asides||[])if(aside.status==='answering'){aside.status='cancelled';aside.error='恢复备份已中止侧问。';}
   for(const view of state.views||[]){view.deliveryPending=false;if(view.status==='pending')view.status='interrupted';}
   for(const request of state.messageBotRequests||[])if(request.status==='admitting'){request.status='interrupted';request.error='备份恢复中断了请求；为避免重复派发，没有自动重试。';}

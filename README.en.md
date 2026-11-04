@@ -4,6 +4,32 @@ Persistent Bot teams for **PI Desktop**. [简体中文](README.md)
 
 PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DS Bot distribution, and it does not claim complete feature parity.
 
+This GitHub release includes changes from 0.3.94 through 0.3.101. See the [combined release notes](docs/GITHUB-RELEASE-0.3.101.md) for features, installation, and validation limits.
+
+## New in 0.3.101
+
+Adds sent-image thumbnails and expanded viewing, unread message dividers, readable tool steps, and live work states. Selected text supports quoting and a seven-item editing menu that follows PI Desktop language settings. Refines the detail avatar, settings header, and message actions. See [release notes](docs/RELEASE-0.3.101.md).
+
+## New in 0.3.100
+
+Edit a Bot's avatar and name directly in the right panel. Uploaded images keep their full frame and support zoom, vertical positioning, dragging, and three shapes. The panel now separates Details, Library (memory, skills, working folder), and Computer (browser and native workspace). See [release notes](docs/RELEASE-0.3.100.md).
+
+## New in 0.3.99
+
+Keeps unanswered greeting choices across chat navigation, adds a compact call bar with an expandable transcript, streams dictation with supported realtime profiles, moves work experience into menus, and adds complete searchable table cards with copy, CSV export and expanded viewing. See [release notes](docs/RELEASE-0.3.99.md).
+
+## New in 0.3.96
+
+Adds immediate local greetings and choice cards, complete-proportion attachment previews, upload retry/removal, and native attachment delivery for group and private administrator planning. Refines composer geometry, header spacing and detail controls. Image understanding still requires a vision-capable model. See [release notes](docs/RELEASE-0.3.96.md).
+
+## New in 0.3.95
+
+Refines header/footer controls and detail cards, adds a customizable sidebar profile image in Settings → General, and places 11px Geist timestamps beside message actions. See [release notes](docs/RELEASE-0.3.95.md).
+
+## New in 0.3.94
+
+Scopes Apps errors to the Apps dialog, pauses failed authorization polling, improves sanitized network diagnostics, and removes thick resize-handle hover bars. See [release notes](docs/RELEASE-0.3.94.md).
+
 ## New in 0.3.93
 
 This release combines 0.3.91–0.3.93. See the [full release notes](docs/GITHUB-RELEASE-0.3.93.md). Fixes [#1](https://github.com/vsd269/PI-Bot/issues/1); thanks [@royrao2007](https://github.com/royrao2007) for the detailed report and suggestions.

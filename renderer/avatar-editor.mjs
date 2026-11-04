@@ -1,5 +1,6 @@
 import {el,icon} from './dom.mjs';
 import {CHARACTERS,PICKER_SHAPES,PICKER_COLUMNS,CHARACTER_COLORS,SHAPES,hasShape,shapeOf,bodyOf,maskBox,holes,nextMarkSerial,lookOf,characterMarkup,MASK_ID,fnv1a} from './upstream/characters.mjs';
+import {framing,frameRect,paintFrame,wholeAvatarImage,framedAvatarImage} from './avatar-framing.mjs';
 import {paintCss} from './upstream/inks.mjs';
 
 // Uploaded avatars are centre-cropped to a small square so team.json stays light.
@@ -52,7 +53,7 @@ export function mark(look,size,live=true,{id='',gaze=false,pokeable=false}={}){
   if(id&&live)span.dataset.botId=id;
   if(gaze)span.dataset.gaze='';span.dataset.state='idle';span.dataset.shape=look.image?'image':look.shape;
   if(pokeable){span.dataset.poke='';let timer;span.addEventListener('click',()=>{clearTimeout(timer);if(matchMedia('(prefers-reduced-motion: reduce)').matches||span.closest('[data-bt-motion=quiet]'))return;span.classList.remove('bt-mark-poke');void span.offsetWidth;span.classList.add('bt-mark-poke');timer=setTimeout(()=>span.classList.remove('bt-mark-poke'),650);});span.addEventListener('animationend',event=>{if(/^bt-poke/.test(event.animationName)){clearTimeout(timer);span.classList.remove('bt-mark-poke');}});}
-  if(look.image){const img=document.createElement('img');img.className='bt-mark-img';img.src=look.image;img.alt='';img.draggable=false;span.append(img);return span;}
+  if(look.image){const frame=el('span','','pi-avatar-photo'),img=document.createElement('img');img.className='bt-mark-img';img.src=look.image;img.alt='';img.draggable=false;frame.append(img);paintFrame(frame,img,look.framing);span.append(frame);return span;}
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
   const box=shapeOf(look.shape).size;
   svg.setAttribute('viewBox','0 0 '+box+' '+box);
@@ -63,13 +64,15 @@ export function mark(look,size,live=true,{id='',gaze=false,pokeable=false}={}){
 
 // The avatar editor: the Bot tab picks a character and colour, the Upload tab takes
 // a photo, and Reset returns to the look the Bot id gives. Every choice saves.
-export function avatarEditor({bot,onSave,onLibrary,onError,onClose,anchor}){
+export function avatarEditor({bot,onSave,onLibrary=async()=>{throw Error('暂时无法打开共享头像库，请关闭后重试。');},onError,onClose,anchor}){
   const box=el('div','','bt-avedit');
   box.setAttribute('role','dialog');box.setAttribute('aria-label','头像编辑');
   let tab=bot.avatar?.libraryId?'library':lookOf(bot).image?'upload':'bot',over=false,page=0,libraryPage=0,libraryData=null,libraryLoading=false,uploaded=null;
+  let disposed=false,uploadEpoch=0;
   const pageSize=36;
   const shapeButtons=new Map(),colorButtons=new Map();
   function choose(patch){
+    if(disposed)return;
     bot={...bot,...patch};
     const look=lookOf(bot);
     for(const [id,button] of shapeButtons){button.setAttribute('aria-pressed',String(!look.image&&look.shape===id));const prior=button.querySelector('.bt-mark');if(!shapeOf(id).raster&&prior?.dataset.color!==look.color){const next=mark({shape:id,color:look.color},36);next.dataset.color=look.color;next.removeAttribute('data-live');prior?.replaceWith(next);}}
@@ -105,7 +108,34 @@ export function avatarEditor({bot,onSave,onLibrary,onError,onClose,anchor}){
   file.onchange=()=>{const chosen=file.files?.[0];file.value='';if(chosen)upload(chosen);};
   box.append(file);
   function fail(error){onError(error?.message||String(error));}
-  function upload(chosen){if(!chosen)return;avatarImage(chosen).then(image=>{uploaded={image,name:String(chosen.name||'').replace(/\.[^.]+$/,'').slice(0,80)};choose({avatar:{image}});tab='upload';draw();}).catch(fail);}
+  async function upload(chosen){
+    if(!chosen)return;const epoch=++uploadEpoch;box.setAttribute('aria-busy','true');
+    try{const image=await wholeAvatarImage(chosen);if(disposed||epoch!==uploadEpoch)return;uploaded={image,name:String(chosen.name||'').replace(/\.[^.]+$/,'').slice(0,80)};choose({avatar:{image,crop:'circle',zoom:1,focusX:.5,focusY:.5}});tab='upload';draw();}
+    catch(error){if(!disposed&&epoch===uploadEpoch)fail(error);}
+    finally{if(!disposed&&epoch===uploadEpoch)box.removeAttribute('aria-busy');}
+  }
+  function framingEditor(){
+    const wrap=el('div','','pi-avatar-framing'),preview=mark(lookOf(bot),168,false),image=preview.querySelector('img'),frame=preview.querySelector('.pi-avatar-photo');
+    preview.classList.add('pi-avatar-frame');preview.setAttribute('aria-label','头像位置预览');preview.title='拖动图片调整位置，滚轮缩放';wrap.append(preview);
+    const controls=[];
+    const update=patch=>{choose({avatar:{...bot.avatar,...patch}});paintFrame(frame,image,bot.avatar);sync();};
+    function slider(label,key,min,max,step,format){
+      const row=el('label','','pi-avatar-range'),head=el('span','','pi-avatar-range-label'),value=el('output'),input=el('input');
+      input.type='range';input.min=min;input.max=max;input.step=step;input.setAttribute('aria-label',label);head.append(el('span',label),value);row.append(head,input);wrap.append(row);
+      input.oninput=()=>update({[key]:Number(input.value)});controls.push({input,value,key,format});
+    }
+    slider('缩放','zoom',1,4,.01,value=>Math.round(value*100)+'%');
+    slider('上下位置','focusY',0,1,.01,value=>Math.round(value*100)+'%');
+    const hint=el('div','','pi-avatar-framing-hint'),reset=el('button','重置位置','bt-more');reset.type='button';reset.onclick=()=>update({zoom:1,focusX:.5,focusY:.5});
+    hint.append(el('span','拖动调整位置，滚轮缩放'),reset);wrap.append(hint);
+    function sync(){const f=framing(bot.avatar);for(const c of controls){c.input.value=f[c.key];c.value.value=c.format(f[c.key]);c.input.setAttribute('aria-valuetext',c.value.value);}}
+    let drag;
+    preview.onpointerdown=event=>{if(event.button!==0||!image.naturalWidth)return;event.preventDefault();preview.setPointerCapture(event.pointerId);const rect=frameRect(image.naturalWidth,image.naturalHeight,bot.avatar);drag={id:event.pointerId,x:event.clientX,y:event.clientY,...framing(bot.avatar),dx:(image.naturalWidth-rect.side)/rect.side*168,dy:(image.naturalHeight-rect.side)/rect.side*168};};
+    preview.onpointermove=event=>{if(!drag||event.pointerId!==drag.id)return;const clamp=v=>Math.max(0,Math.min(1,v));update({focusX:drag.dx?clamp(drag.focusX-(event.clientX-drag.x)/drag.dx):drag.focusX,focusY:drag.dy?clamp(drag.focusY-(event.clientY-drag.y)/drag.dy):drag.focusY});};
+    preview.onpointerup=preview.onpointercancel=()=>{drag=null;};
+    preview.onwheel=event=>{event.preventDefault();update({zoom:Math.max(1,Math.min(4,framing(bot.avatar).zoom+(event.deltaY<0?.08:-.08)))});};
+    sync();return wrap;
+  }
   async function loadLibrary(nextPage){
     libraryPage=Math.max(0,nextPage);libraryLoading=true;draw();
     try{libraryData=await onLibrary({action:'list',page:libraryPage});libraryPage=libraryData.page;}
@@ -113,6 +143,7 @@ export function avatarEditor({bot,onSave,onLibrary,onError,onClose,anchor}){
     finally{libraryLoading=false;draw();}
   }
   function draw(){
+    if(disposed)return;
     const look=lookOf(bot),hasPhoto=Boolean(look.image);
     for(const [id,button] of Object.entries(tabButtons))button.setAttribute('aria-selected',String(tab===id));
     body.replaceChildren();
@@ -162,33 +193,25 @@ export function avatarEditor({bot,onSave,onLibrary,onError,onClose,anchor}){
       pages.append(previous,indicator,next);
       body.append(grid,colors,pages);syncPalette(look);
     }else if(tab==='upload'){
-      const zone=el('div','','bt-dropzone');
+      if(hasPhoto)body.append(framingEditor());
+      const zone=el('button','','bt-dropzone pi-avatar-dropzone');zone.type='button';zone.setAttribute('aria-label',hasPhoto?'替换头像图片':'上传头像图片');zone.onclick=()=>file.click();
       zone.toggleAttribute('data-over',over);
       zone.ondragover=event=>{event.preventDefault();over=true;zone.toggleAttribute('data-over',true);};
       zone.ondragleave=()=>{over=false;zone.toggleAttribute('data-over',false);};
       zone.ondrop=event=>{event.preventDefault();over=false;zone.toggleAttribute('data-over',false);upload(event.dataTransfer.files?.[0]);};
-      if(hasPhoto){const img=document.createElement('img');img.src=look.image;img.alt='';zone.append(img);}
-      zone.append(el('div',hasPhoto?'拖入、粘贴或选择新图片':'拖入、粘贴或选择一张图片'));
-      const actions=el('div','','bt-actions');
-      actions.style.justifyContent='center';
-      const browse=el('button',hasPhoto?'替换':'选择图片','bt-soft bt-soft-sm');
-      browse.type='button';browse.onclick=()=>file.click();
-      actions.append(browse);
-      if(hasPhoto){
-        const remove=el('button','移除图片','bt-soft bt-soft-sm');
-        remove.type='button';
-        remove.onclick=()=>{choose({avatar:hasShape(bot.avatar?.shape)?{shape:bot.avatar.shape}:null});draw();};
-        actions.append(remove);
-      }
-      zone.append(actions);
-      body.append(zone);
-      const candidate=uploaded?.image||(!bot.avatar?.libraryId?look.image:null);
+      zone.append(icon('ImageIcon'),el('span','把图片拖到这里，或选择一张'),el('span','PNG、JPEG、GIF 或 WebP · 最大 25 MB','pi-avatar-filehint'));body.append(zone);
+      const shapeRow=el('div','','pi-avatar-shapes'),shapeGroup=el('div','','bt-seg'),remove=el('button','','pi-avatar-remove');shapeGroup.setAttribute('role','group');shapeGroup.setAttribute('aria-label','头像形状');
+      for(const [value,label] of [['circle','圆形'],['rounded','圆角'],['square','方形']]){const b=el('button',label);b.type='button';b.disabled=!hasPhoto;b.setAttribute('aria-pressed',String(hasPhoto&&framing(bot.avatar).crop===value));b.onclick=()=>{choose({avatar:{...bot.avatar,crop:value}});draw();};shapeGroup.append(b);}
+      remove.type='button';remove.title='移除图片';remove.setAttribute('aria-label','移除图片');remove.append(icon('TrashIcon'));remove.disabled=!hasPhoto;
+      remove.onclick=()=>{uploadEpoch++;uploaded=null;choose({avatar:hasShape(bot.avatar?.shape)?{shape:bot.avatar.shape}:null});draw();};
+      shapeRow.append(el('span','形状'),shapeGroup,remove);body.append(shapeRow);
+      const candidate=!bot.avatar?.libraryId?look.image:null;
       if(candidate){
         const saveRow=el('div','','bt-avatar-library-save'),name=document.createElement('input');
         name.type='text';name.maxLength=80;name.placeholder='头像名称';name.setAttribute('aria-label','共享头像名称');name.value=uploaded?.name||'';
         const save=el('button','保存到共享库','bt-soft bt-soft-sm');save.type='button';save.disabled=!name.value.trim();
         name.oninput=()=>{save.disabled=!name.value.trim();};
-        save.onclick=async()=>{save.disabled=true;try{const data=await libraryImage(candidate),result=await onLibrary({action:'add',name:name.value.trim(),...data});uploaded=null;libraryData=null;tab='library';libraryPage=Math.max(0,Math.ceil(result.total/12)-1);await loadLibrary(libraryPage);}catch(error){fail(error);save.disabled=false;}};
+        save.onclick=async()=>{save.disabled=true;try{const data=await libraryImage(await framedAvatarImage(bot.avatar)),result=await onLibrary({action:'add',name:name.value.trim(),...data});uploaded=null;libraryData=null;tab='library';libraryPage=Math.max(0,Math.ceil(result.total/12)-1);await loadLibrary(libraryPage);}catch(error){fail(error);save.disabled=false;}};
         saveRow.append(name,save);body.append(saveRow);
       }
     }else{
@@ -220,13 +243,14 @@ export function avatarEditor({bot,onSave,onLibrary,onError,onClose,anchor}){
   window.addEventListener('keydown',onKey,true);
   window.addEventListener('pointerdown',onDown,true);
   draw();if(tab==='library')void loadLibrary(0);
-  return {node:box,dispose(){window.removeEventListener('paste',onPaste);window.removeEventListener('keydown',onKey,true);window.removeEventListener('pointerdown',onDown,true);}};
+  return {node:box,dispose(){disposed=true;uploadEpoch++;window.removeEventListener('paste',onPaste);window.removeEventListener('keydown',onKey,true);window.removeEventListener('pointerdown',onDown,true);}};
 }
 
 export function avatarTrigger(bot,onOpen,size=64,live=true){
   const anchor=el('div','','bt-avatar-anchor');
   const trigger=el('button','','bt-avatar-trigger');
   trigger.type='button';trigger.title='更换头像';trigger.setAttribute('aria-label','更换头像');trigger.setAttribute('aria-expanded','false');
+  trigger.style.width=size+'px';trigger.style.height=size+'px';
   trigger.append(mark(lookOf(bot),size,live));
   const pencil=el('span','','bt-avatar-pencil');pencil.setAttribute('aria-hidden','true');pencil.append(icon('PencilIcon'));
   trigger.append(pencil);

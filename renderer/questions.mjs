@@ -10,7 +10,7 @@ export function createQuestions({app,getQuestions,answer,nameOf,onError}){
   function paintBusy(id,busy){for(const card of app.querySelectorAll('[data-question-id]'))if(card.dataset.questionId===id){card.setAttribute('aria-busy',String(busy));for(const button of card.querySelectorAll('button'))button.disabled=busy;card.update?.();}}
   function render(q){
     const settled=q.status!=='pending',options=optionsOf(q),draft=stateOf(q);
-    const card=el('form','','bt-q question-card'+(settled?' bt-q-settled':''));card.dataset.questionId=q.id;
+    const card=el('form','','bt-q question-card'+(settled?' bt-q-settled':''));card.dataset.questionId=q.id;if(q.creationGreeting)card.dataset.greeting='';
     card.setAttribute('aria-label',q.text);const head=el('div','','bt-q-head'),text=el('div','','bt-q-text');text.append(el('strong',nameOf(q.botId)+' 向你提问','bt-q-detail'),el('p',q.text,'bt-q-title'));if(q.detail)text.append(el('div',q.detail,'bt-q-detail'));head.append(text);card.append(head);
     if(settled){
       if(q.status==='dismissed')card.append(el('div','已跳过','bt-q-detail'));
@@ -23,7 +23,9 @@ export function createQuestions({app,getQuestions,answer,nameOf,onError}){
     const update=()=>{controls.forEach((b,i)=>{const selected=draft.selected.includes(options[i].label);if(q.multiSelect){b.setAttribute('aria-pressed',String(selected));b.querySelector('.bt-q-check').hidden=!selected;}});if(send)send.disabled=sending.has(q.id)||!draft.selected.length&&!draft.custom.trim();};
     const choose=label=>{if(sending.has(q.id))return;if(q.multiSelect){draft.selected=draft.selected.includes(label)?draft.selected.filter(v=>v!==label):[...draft.selected,label];update();}else submit(q,{selected:[label]});};
     options.forEach((option,i)=>{const pick=el('button','','bt-q-opt');pick.type='button';pick.setAttribute('aria-label',option.label);pick.setAttribute('aria-keyshortcuts',String.fromCharCode(97+i));pick.append(el('span',String.fromCharCode(65+i),'bt-key'));const body=el('span','','bt-q-body');body.append(el('span',option.label,'bt-q-label'));if(option.description)body.append(el('span',option.description,'bt-q-desc'));pick.append(body);if(q.multiSelect){const check=el('span','','bt-q-check');check.append(icon('CheckIcon'));pick.append(check);}pick.onclick=()=>choose(option.label);controls.push(pick);rows.append(pick);});
-    if(q.allowCustom===true||!q.options){const wrap=el('div','','bt-q-custom'),field=el('label','','bt-q-field');custom=el('textarea','','bt-q-input');custom.rows=1;custom.placeholder='输入自己的回答';custom.setAttribute('aria-label','自己的回答');custom.value=draft.custom;custom.oninput=()=>{draft.custom=custom.value;update();};custom.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();card.requestSubmit();}};field.append(custom);wrap.append(field);card.append(wrap);}
+    if(q.allowCustom===true||!q.options){const wrap=el('div','','bt-q-custom'),field=el('label','','bt-q-field');custom=el('textarea','','bt-q-input');custom.rows=1;custom.placeholder='输入自己的回答';custom.setAttribute('aria-label','自己的回答');custom.value=draft.custom;custom.oninput=()=>{draft.custom=custom.value;update();};custom.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();card.requestSubmit();}};field.append(custom);wrap.append(field);card.append(wrap);
+      if(q.creationGreeting){wrap.hidden=!draft.custom&&!draft.customOpen;card.openCustom=()=>{draft.customOpen=true;wrap.hidden=false;custom.focus();};const other=el('button','','bt-q-opt');other.type='button';other.append(el('span',String.fromCharCode(65+options.length),'bt-key'),el('span','其他事情','bt-q-label'));other.onclick=card.openCustom;rows.append(other);}
+    }
     if(q.multiSelect||custom){const foot=el('div','','bt-q-foot');send=el('button','回答','bt-q-submit');send.type='submit';foot.append(send);card.append(foot);}
     card.onsubmit=e=>{e.preventDefault();if(draft.selected.length||draft.custom.trim())submit(q,{selected:draft.selected,custom:draft.custom});};
     card.pick=choose;card.customInput=custom;card.update=update;update();if(sending.has(q.id))queueMicrotask(()=>paintBusy(q.id,true));return card;
@@ -34,7 +36,7 @@ export function createQuestions({app,getQuestions,answer,nameOf,onError}){
     if(event.composedPath().some(typing)||typing(app.getRootNode().activeElement)||[...app.querySelectorAll('dialog[open],[role="dialog"],[aria-modal="true"]')].some(node=>!node.hidden&&node.getClientRects().length))return;
     const q=getQuestions().find(q=>q.status==='pending');if(!q)return;const card=[...app.querySelectorAll('[data-question-id]')].find(n=>n.dataset.questionId===q.id);if(!card)return;
     const index=event.key.toUpperCase().charCodeAt(0)-65,options=optionsOf(q);
-    if(index>=0&&index<options.length){event.preventDefault();card.pick(options[index].label);}else if(index===options.length&&card.customInput){event.preventDefault();card.customInput.focus();}
+    if(index>=0&&index<options.length){event.preventDefault();card.pick(options[index].label);}else if(index===options.length&&card.customInput){event.preventDefault();if(card.openCustom)card.openCustom();else card.customInput.focus();}
   }
   app.addEventListener('keydown',onKey);
   return {render,close(){closed=true;drafts.clear();app.removeEventListener('keydown',onKey);}};

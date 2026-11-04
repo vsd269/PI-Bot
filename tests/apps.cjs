@@ -6,6 +6,24 @@ const account={id:'ca_test',toolkit:{slug:'gmail'},status:'ACTIVE',state:{auth:{
 const tool={slug:'GMAIL_SEND_EMAIL',toolkit:{slug:'gmail'},version:'20261101_00',description:'Send email',input_parameters:{type:'object'}};
 const response=(data,status=200)=>({response:{ok:status>=200&&status<300,status},text:JSON.stringify(data)});
 const gate=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+test('application failures distinguish network, timeout, large response and HTTP without leaking secrets or replaying requests',async()=>{
+  for(const [error,code] of [[Error('Composio secret '+KEY),'APP_NETWORK'],[Object.assign(Error(KEY),{name:'TimeoutError'}),'APP_TIMEOUT'],[Object.assign(Error(KEY),{code:'RESPONSE_TOO_LARGE'}),'APP_RESPONSE_TOO_LARGE']]){
+    const f=fixture();await f.ready();const before=JSON.stringify(f.apps.config()),count=f.calls.length;
+    f.handler=async()=>{throw error;};
+    await assert.rejects(f.apps.inventory(),e=>e.code===code&&!e.message.includes(KEY)&&e.message.includes('未更改'));
+    assert.equal(f.calls.length,count+1);assert.equal(JSON.stringify(f.apps.config()),before);
+    await assert.rejects(f.apps.api(f.apps.config(),'/test-write',{method:'POST',body:{}}),e=>e.code===code&&e.message.includes('未自动重试')&&!e.message.includes(KEY));
+    assert.equal(f.calls.length,count+2);
+  }
+  for(const status of [401,403,429,502]){const f=fixture();await f.ready();f.handler=async()=>response({secret:KEY},status);await assert.rejects(f.apps.inventory(),e=>e.status===status&&!e.message.includes(KEY));}
+});
+test('bounded transport identifies oversized declared and streamed responses',async()=>{
+  const {boundedFetch}=require('../src/net'),http=require('node:http');
+  const server=http.createServer((req,res)=>{if(req.url==='/declared')res.setHeader('content-length','40');res.end('x'.repeat(40));});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));
+  try{for(const route of ['/declared','/stream'])await assert.rejects(boundedFetch('http://127.0.0.1:'+server.address().port+route,{},16),e=>e.code==='RESPONSE_TOO_LARGE');}
+  finally{await new Promise(r=>server.close(r));}
+});
 function fixture(){
   const team={state:{bots:[{id:'a',name:'Alice'},{id:'b',name:'Bob'}]},backups:{root:require('node:os').tmpdir()},bot(id){const b=this.state.bots.find(b=>b.id===id);if(!b)throw Error('Bot 已删除');return b;}};
   team.vault=new Vault(team);let failSave=false;team.vault.persist=async entries=>{if(failSave)throw Error('disk full');team.vault.validate(entries);team.vault.entries=entries;};

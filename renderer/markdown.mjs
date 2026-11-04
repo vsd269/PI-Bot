@@ -1,4 +1,5 @@
 import {el} from './dom.mjs';
+import {messageTable,tableCells} from './message-table.mjs';
 
 // Construct nodes directly: model output never becomes executable HTML.
 export function markdown(text,plain=value=>document.createTextNode(value),openFile){
@@ -17,6 +18,7 @@ export function markdown(text,plain=value=>document.createTextNode(value),openFi
     }
     target.append(plain(value.slice(last)));
   }
+  const isTable=i=>i+1<lines.length&&lines[i].includes('|')&&tableCells(lines[i+1]).length===tableCells(lines[i]).length&&tableCells(lines[i+1]).every(c=>/^:?-{3,}:?$/.test(c));
   let index=0;
   while(index<lines.length){
     const line=lines[index];
@@ -26,9 +28,9 @@ export function markdown(text,plain=value=>document.createTextNode(value),openFi
     if(heading){const node=el('h'+heading[1].length);inline(node,heading[2]);root.append(node);index++;continue;}
     const listItem=/^\s*(?:[-*]|\d+[.)])\s+/;
     if(listItem.test(line)){const ordered=/^\s*\d+/.test(line),list=el(ordered?'ol':'ul');if(ordered)list.start=Number(line.match(/\d+/)[0]);while(index<lines.length&&listItem.test(lines[index])&&/^\s*\d+/.test(lines[index])===ordered){const li=el('li'),value=lines[index++].replace(listItem,''),task=/^\[([ xX])\]\s+/.exec(value);if(task){const cb=el('input');cb.type='checkbox';cb.disabled=true;cb.checked=task[1]!==' ';li.append(cb);inline(li,value.slice(task[0].length));}else inline(li,value);list.append(li);}root.append(list);continue;}
-    if(line.includes('|')&&index+1<lines.length&&/^\s*\|?\s*:?-{3,}/.test(lines[index+1])){const table=el('table','','feature-table'),cells=l=>l.replace(/^\s*\||\|\s*$/g,'').split('|');const header=el('tr');for(const value of cells(line)){const th=el('th');inline(th,value.trim());header.append(th);}table.append(header);index+=2;let count=0;while(index<lines.length&&lines[index].includes('|')&&count++<100){const tr=el('tr');for(const value of cells(lines[index++])){const td=el('td');inline(td,value.trim());tr.append(td);}table.append(tr);}root.append(table);continue;}
+    if(isTable(index)){const headers=tableCells(line),rows=[];index+=2;while(index<lines.length&&lines[index].trim()&&lines[index].includes('|'))rows.push(tableCells(lines[index++]));root.append(messageTable(headers,rows,inline));continue;}
     const quote=/^>\s?/.test(line),paragraph=el(quote?'blockquote':'div','','message-paragraph'),parts=[];
-    while(index<lines.length&&lines[index].trim()&&!/^\s*```|^#{1,6}\s|^\s*(?:[-*]|\d+[.)])\s+/.test(lines[index])){
+    while(index<lines.length&&lines[index].trim()&&!isTable(index)&&!/^\s*```|^#{1,6}\s|^\s*(?:[-*]|\d+[.)])\s+/.test(lines[index])){
       if((/^>\s?/.test(lines[index]))!==quote)break;parts.push(lines[index++].replace(quote?/^>\s?/:/^$/,''));
     }
     inline(paragraph,parts.join('\n'));root.append(paragraph);

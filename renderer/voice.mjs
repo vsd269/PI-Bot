@@ -4,13 +4,15 @@ const labels={starting:'正在开启麦克风…',listening:'正在聆听…',tr
 const activeStatuses=new Set(['queued','launching','running','waiting','waiting_teammates']);
 export function createVoice({call,getTarget,getState=()=>({bots:[],rooms:[],jobs:[]}),insert,send,notice,onStatus,captureAudio=openCapture,makeDetector=turnDetector}){
   let recording=null,target=null,conversation=false,paused=false,starting=false,working=false,generation=0,frame,timer,recognition,disposed=false,phase='',caption='',waiting=null,pendingReply=null,configuration,captureAbort,captureContext=null,captureEpoch=0;
+  let transcript=[];
+  const remember=(role,text)=>{transcript=[...transcript,{id:crypto.randomUUID(),role,text}].slice(-100);};
   const key=t=>t?.kind+':'+t?.id;
   const valid=token=>!disposed&&token===generation&&key(getTarget())===key(target);
   let ttsAudio=null,playResolve=null,playback=null,speechEpoch=0;const ttsRequests=new Set();
   const speechConfig=()=>configuration?.speechGlobal||Object.values(configuration?.speech||{})[0];
   const interruptionMode=()=>speechConfig()?.interruption||'speaker';
   function stopSpeech(){speechEpoch++;playback=null;window.speechSynthesis?.cancel();const audio=ttsAudio;ttsAudio=null;if(audio){audio.onended=audio.onerror=null;audio.pause();audio.removeAttribute('src');audio.load();}playResolve?.(false);playResolve=null;for(const requestId of ttsRequests)void call('team.extensions',{action:'ttsCancel',requestId}).catch(()=>{});ttsRequests.clear();}
-  function status(next,text=caption,level=0){phase=next;caption=text;const interruptible=next==='speaking'&&!!recording&&interruptionMode()!=='off';onStatus(interruptible?'正在朗读 · 说话可打断':labels[next]||'',conversation,{phase:next,caption:text,level,paused,interruptible,microphoneActive:!!recording});}
+  function status(next,text=caption,level=0){phase=next;caption=text;const interruptible=next==='speaking'&&!!recording&&interruptionMode()!=='off';onStatus(interruptible?'正在朗读 · 说话可打断':labels[next]||'',conversation,{phase:next,caption:text,level,paused,interruptible,microphoneActive:!!recording,transcript});}
   function stopCapture(){captureEpoch++;captureAbort?.abort();captureAbort=null;cancelAnimationFrame(frame);clearTimeout(timer);recording?.cancel();recording=null;captureContext=null;const r=recognition;recognition=null;if(r){r.onend=null;r.onresult=null;r.onerror=null;r.abort();}}
   function halt(){generation++;conversation=false;paused=false;starting=false;working=false;waiting=null;pendingReply=null;configuration=null;stopCapture();stopSpeech();target=null;status('','');}
   function fail(error){if(disposed)return;stopCapture();stopSpeech();starting=false;working=false;const text=({blocked:'麦克风权限被阻止，请在 PI 中允许录音。',unavailable:'当前环境不能使用麦克风，请检查 PI 的录音权限。',failed:'无法开启麦克风，请检查录音设备。'})[error.kind]||error.message||String(error);notice(text);if(conversation){paused=true;status('error',text);}else halt();}
@@ -23,7 +25,7 @@ export function createVoice({call,getTarget,getState=()=>({bots:[],rooms:[],jobs
     if(!valid(token)||paused)return;working=false;text=String(text||'').trim();if(!text){if(conversation)void start();else status('','');return;}
     if(!conversation){insert(text);status('','');return;}
     const state=getState(),baseline=new Set([...state.jobs.map(j=>j.id),...state.bots.flatMap(b=>b.chat||[]).map(l=>l.id),...state.rooms.flatMap(r=>r.log||[]).map(l=>l.id)]);
-    const entry=send(text,{...target});waiting={entry,messageId:entry?.id,baseline,at:Date.now(),seen:false};status('thinking',text);
+    remember('user',text);const entry=send(text,{...target});waiting={entry,messageId:entry?.id,baseline,at:Date.now(),seen:false};status('thinking',text);
   }
   async function finish(){
     if(!recording||working)return;cancelAnimationFrame(frame);clearTimeout(timer);const capture=recording,context=captureContext;recording=null;captureContext=null;working=true;const token=generation,botId=serviceBot();const watching=context?.guard&&!context.heardUser;
@@ -52,7 +54,7 @@ export function createVoice({call,getTarget,getState=()=>({bots:[],rooms:[],jobs
       if(!configuration){const value=await call('team.extensions',{action:'get'});if(!valid(token))return;configuration=value.config;}
       const saved=configuration.speechGlobal||Object.values(configuration.speech||{}).find(c=>c.enabled!==false)||Object.values(configuration.speech||{})[0];if(!saved)throw Error('请先在语音设置中保存并使用一个转写服务。');const provider=saved.defaultProvider||saved.provider,profile=saved.profiles?.[provider]||saved;if(!conversation&&profile.enabled===false)throw Error('默认语音服务已停用，请在语音设置中启用并保存。');
       const abort=captureAbort=new AbortController();let capture;
-      capture=await captureAudio({botId:serviceBot(),realtime:conversation,signal:abort.signal,onTranscribing:()=>{if(valid(token)&&recording===capture)void finish();}});
+      capture=await captureAudio({botId:serviceBot(),realtime:true,mode:conversation?'call':'dictation',signal:abort.signal,onTranscribing:()=>{if(valid(token)&&recording===capture)void finish();}});
       if(!valid(token)||paused||epoch!==captureEpoch){capture.cancel();return;}
       recording=capture;const context=captureContext={guard:monitor?playbackEchoGuard(interruptionMode()==='headphones'||capture.echoCancellation===true?'':monitor.text):null,heardUser:false,lastVoice:-Infinity,loudSince:null,candidate:'',candidateSince:0,endedAt:0};
       const detector=makeDetector({quietMs:conversation?800:1200});status(playback?'speaking':'listening',playback?.text||'');
@@ -119,11 +121,11 @@ export function createVoice({call,getTarget,getState=()=>({bots:[],rooms:[],jobs
       error=jobs.find(j=>j.status==='error')?.error||'';
     }
     if(!w.seen){if(Date.now()-w.at>180000){waiting=null;fail(Error('语音消息未被接收，请检查聊天中的发送状态后重试。'));}return;}if(pending)return;if(!replies.length&&!error){if(Date.now()-w.at>180000){waiting=null;fail(Error('尚未收到回复，请检查会话执行状态。'));}return;}
-    waiting=null;if(error&&!replies.length){fail(Error(error));return;}pendingReply=replies.join('\n\n');if(paused)return;const reply=pendingReply;pendingReply=null;speak(reply,true);
+    waiting=null;if(error&&!replies.length){fail(Error(error));return;}pendingReply=replies.join('\n\n');remember('assistant',pendingReply);if(paused)return;const reply=pendingReply;pendingReply=null;speak(reply,true);
   }
   return {
     async toggle(){if(conversation){halt();return;}if(working)return;if(starting){halt();return;}if(recording){await finish();return;}if(recognition){recognition.stop();return;}await start();},
-    async continuous(){if(conversation){halt();return;}halt();const selected=getTarget();if(!selected){notice('请先选择一个 Bot 或群聊。');return;}target={...selected};conversation=true;await start();},
+    async continuous(){if(conversation){halt();return;}halt();const selected=getTarget();if(!selected){notice('请先选择一个 Bot 或群聊。');return;}target={...selected};transcript=[];conversation=true;await start();},
     pause(){if(!conversation)return;paused=!paused;generation++;stopCapture();working=false;starting=false;stopSpeech();if(paused){status('paused');return;}configuration=null;if(waiting){status('thinking');update(getState());}else if(pendingReply){const reply=pendingReply;pendingReply=null;speak(reply,true);}else void start();},
     update,selectionChanged:halt,speak:async text=>{try{configuration??=(await call('team.extensions',{action:'get'})).config;speak(text,false);}catch(e){notice(e.message||String(e));}},stop:halt,dispose(){halt();disposed=true;}
   };

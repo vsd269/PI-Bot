@@ -5,6 +5,16 @@ const {LongMessages}=require('../src/long-messages'),{ImageCache}=require('../sr
 async function fixture(ctx){const root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'pi-attachments-'))),data=path.join(root,'plugins','data','local.pi-bot');await fs.mkdir(path.join(data,'uploaded-files'),{recursive:true});ctx.after(()=>fs.rm(root,{recursive:true,force:true,maxRetries:5,retryDelay:100}));return {root,data};}
 const inside=(root,file)=>{const relative=path.relative(root,file);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 
+test('saved image previews allow images above 1 MB and require an exact attachment plus safe host image output',async ctx=>{
+  const {previewAttachment}=require('../src/attachments'),t=await fixture(ctx),file={path:path.join(t.data,'uploaded-files','large.png'),name:'large.png',kind:'image'};
+  await fs.writeFile(file.path,Buffer.alloc(1200000));let calls=0;const dataUrl='data:image/png;base64,iVBORw0KGgo=';
+  Object.assign(t,{state:{jobs:[{id:'job',attachments:[file]}]},bot:()=>({chat:[{id:'line',attachments:[file]}]}),room:()=>({log:[{id:'group',attachments:[file]}]}),pi:{fs:{readPreview:async name=>{calls++;assert.equal(name,file.path);return {kind:'image',dataUrl};}}}});
+  for(const context of [{jobId:'job'},{botId:'bot',lineId:'line'},{roomId:'room',lineId:'group'}])assert.deepEqual(await previewAttachment(t,{...context,index:0}),{name:'large.png',dataUrl});
+  assert.equal(calls,3);await assert.rejects(previewAttachment(t,{jobId:'missing',index:0,path:file.path}),/只能预览/);await assert.rejects(previewAttachment(t,{jobId:'job',index:-1}),/只能预览/);assert.equal(calls,3);
+  t.pi.fs.readPreview=async()=>({kind:'image',dataUrl:'data:image/svg+xml;base64,PHN2Zy8+'});await assert.rejects(previewAttachment(t,{jobId:'job',index:0}),/安全图片/);
+  t.pi.fs={};await assert.rejects(previewAttachment(t,{jobId:'job',index:0}),/文件预览接口/);
+});
+
 test('uploaded TXT, Word and PNG are copied intact into the owning native session',async ctx=>{
   const t=await fixture(ctx),uploads=new AttachmentUploads(t),files=[];
   for(const [name,bytes] of [['资料.txt',Buffer.from('开头\n全部中文内容\n最后一行')],['说明.docx',Buffer.from('PK\x03\x04word document fixture')],['照片.png',Buffer.from('PNG fixture')]]){
@@ -56,4 +66,37 @@ test('large request assembly rejects missing or reordered chunks and clears on u
 });
 test('chunk assembly cannot bypass the renderer channel allowlist',()=>{
   const {onRendererCall}=require('../main'),value=JSON.stringify({channel:'unknown.operation',payload:{}}),{id}=onRendererCall('request.upload',{action:'begin',length:value.length});onRendererCall('request.upload',{action:'chunk',id,offset:0,chunk:value});assert.throws(()=>onRendererCall('request.upload',{action:'finish',id}),/Unknown PI-bot operation/);
+});
+
+for(const group of [false,true])test((group?'group':'private')+' administrator planning receives actual image bytes in its own session',async ctx=>{
+  const t=await fixture(ctx),file={path:path.join(t.data,'uploaded-files','screen.png'),name:'screen.png',kind:'image'},bytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8WQAAAAASUVORK5CYII=','base64');await fs.writeFile(file.path,bytes);
+  const admin={id:'chief',name:'Chief',role:'Administrator',chat:[{planningId:'plan',text:'pending'}]},room=group?{id:'room',log:[{planningId:'plan',text:'pending'}],workEpoch:0}:null;
+  const evidence={text:JSON.stringify({reply:'已查看图片',assignments:[]}),replies:[{role:'assistant'}],usage:{operations:[]}};let prompt;
+  Object.assign(t,{state:{bots:[admin],rooms:room?[room]:[],integrations:{},completions:[]},groupPlans:new Map(),settingWrites:Promise.resolve(),session:async()=>group?'group-plan':'private-plan',model:async()=>({key:'vision',input:['text','image']}),inspectOnce:async()=>evidence,inspect:async()=>evidence,save:async()=>{},invoke:async(operation,args)=>{if(operation==='agent/getStatus')return {status:{isRunning:false}};if(operation==='agent/prompt'){prompt=args[0];assert.equal((room?.planningClaim||admin.privatePlanningClaim).status,'submitting');return {accepted:true,turnId:'turn'};}throw Error(operation);}});
+  t.longMessages=new LongMessages(t);t.integrations={images:new ImageCache(t)};
+  await Team.prototype.nativePlan.call(t,room,admin,'请查看图片','plan',Date.now(),0,[file]);assert.equal(prompt.attachments.length,1);assert(inside(path.join(t.root,'scratch',prompt.sessionId),prompt.attachments[0].path));assert.deepEqual(await fs.readFile(prompt.attachments[0].path),bytes);assert.equal(prompt.attachments[0].kind,'image');assert.equal(file.path,path.join(t.data,'uploaded-files','screen.png'));
+});
+test('an explicit non-vision model uses OCR instead of an unsupported image payload',async ctx=>{
+ const t=await fixture(ctx),file={path:path.join(t.data,'uploaded-files','screen.png'),name:'screen.png',kind:'image'};await fs.writeFile(file.path,'image');t.state={integrations:{}};t.model=async()=>({key:'text',supportsVision:false});const cache=new ImageCache(t);cache.ocr=async()=> '截图内的文字';const prepared=await cache.prepare({attachments:[file]},{});assert.equal(prepared.attachments.length,0);assert(prepared.text.includes('截图内的文字'));
+});
+
+for(const failed of [false,true])test('private administrator attachment '+(failed?'failure clears only its own preview':'route replaces preview with one complete reply'),async ctx=>{
+  const t=Object.assign(new Team({models:{list:async()=>[]}}),await fixture(ctx)),file={path:path.join(t.data,'uploaded-files','screen.png'),name:'screen.png',kind:'image'};await fs.writeFile(file.path,'image fixture');
+  const prior={id:'prior',planningId:'other-plan',text:'unrelated progress',planning:true,progress:true},bot={id:'chief',name:'Chief',role:'Administrator',chat:[prior]},evidence={text:JSON.stringify({reply:'图片检查完成',assignments:[],actions:[]}),replies:[{role:'assistant'}],usage:{operations:[]}};
+  let submitted=0;
+  Object.assign(t,{state:{bots:[bot],rooms:[],jobs:[],questions:[],views:[],completions:[],integrations:{}},vault:{redact:value=>value},context:()=>'',session:async()=> 'private-plan',model:async()=>({key:'vision',input:['text','image']}),inspectOnce:async()=>evidence,inspect:async()=>evidence,save:async()=>{},complete:async()=>assert.fail('text-only completion must not receive image requests'),invoke:async(operation,args)=>{if(operation==='agent/getStatus')return {status:{isRunning:false}};if(operation==='agent/abort')return {};if(operation==='agent/prompt'){submitted++;assert.equal(args[0].attachments.length,1);if(failed)throw Error('测试附件错误');return {accepted:true,turnId:'turn'};}throw Error(operation);}});
+  t.integrations={images:new ImageCache(t)};
+  const run=t.runPrivateChat(bot.id,'看一下图片',{attachments:[file]});
+  if(failed)await assert.rejects(run,/测试附件错误/);else assert.equal((await run).text,'图片检查完成');
+  assert.equal(submitted,1);assert.equal(bot.planning,false);assert.equal(t.groupPlans.size,0);assert.equal(prior.text,'unrelated progress');assert.equal(prior.progress,true);
+  const replies=bot.chat.filter(line=>line.coordinator);assert.equal(replies.length,1);assert.equal(replies[0].progress,false);assert.equal(replies[0].planning,false);
+  if(failed){assert.equal(replies[0].status,'error');assert(replies[0].text.includes('测试附件错误'));}else{assert.equal(replies[0].text,'图片检查完成');assert.equal(bot.privatePlanningClaim.status,'completed');}
+});
+
+test('private native planning does not submit before durable admission and aborts on post-submit save failure',async ctx=>{
+  for(const afterSubmit of [false,true]){
+    const t=Object.assign(new Team({models:{list:async()=>[]}}),await fixture(ctx)),admin={id:'chief',role:'Administrator',chat:[]};let prompts=0,aborts=0;
+    Object.assign(t,{state:{bots:[admin],rooms:[]},session:async()=> 'private',save:async()=>{if(admin.privatePlanningClaim?.status===(afterSubmit?'accepted':'submitting'))throw Error('SAVE_FAILURE');},invoke:async(operation)=>{if(operation==='agent/getStatus')return {status:{isRunning:false}};if(operation==='agent/prompt'){prompts++;return {accepted:true,turnId:'private-turn'};}if(operation==='agent/abort'){aborts++;return {};}throw Error(operation);}});
+    await assert.rejects(()=>t.nativePlan(null,admin,'request','plan',Date.now()),/SAVE_FAILURE/);assert.equal(prompts,afterSubmit?1:0);assert.equal(aborts,afterSubmit?1:0);assert.equal(t.groupPlans.size,0);
+  }
 });

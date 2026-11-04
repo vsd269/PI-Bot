@@ -2,6 +2,16 @@ import {icons} from './upstream/icons-static.mjs';
 // Additional original menu icons from the pinned upstream icons.mjs source.
 const lineIcon=paths=>({tag:'svg',props:{width:20,height:20,viewBox:'0 0 20 20',fill:'none',stroke:'currentColor',strokeWidth:1.5,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true},children:paths.map(d=>({tag:'path',props:{d}}))});
 const menuIcons={
+  QuoteIcon:lineIcon(['M4 10h4v6H2v-5c0-4 2-6 6-7v3c-2 .5-3.3 1.5-4 3Z','M14 10h4v6h-6v-5c0-4 2-6 6-7v3c-2 .5-3.3 1.5-4 3Z']),
+  SkillIcon:lineIcon(['M11.5 2 4 11h5l-.5 7L16 9h-5z']),
+  TranscriptIcon:lineIcon(['M4 3h12v14H4Z','M7 7h6M7 10h6M7 13h4']),
+  CallEndIcon:lineIcon(['M3 12a10 10 0 0 1 14 0l-2.3 3-3-1v-2a8 8 0 0 0-3.4 0v2l-3 1Z']),
+  MicOffIcon:lineIcon(['M3 3l14 14','M7 7V5a3 3 0 0 1 6 0v5','M4 9v1a6 6 0 0 0 10.4 4.1M16 9v1','M10 16v3M7 19h6']),
+  ExpandIcon:lineIcon(['M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5']),
+  FileIcon:lineIcon(['M5 2.5h6l4 4v11H5Z','M11 2.5v4h4','M7.5 10h5M7.5 13h5']),
+  ImageIcon:lineIcon(['M3 3h14v14H3Z','M3 14l4.5-5 3 3 2-2L17 15','M12.5 6h.01']),
+  ModelIcon:lineIcon(['M11.5 2.5 13 7l4.5 1.5L13 10l-1.5 4.5L10 10 5.5 8.5 10 7Z','M4 12l.9 2.6L7.5 15.5l-2.6.9L4 19l-.9-2.6L.5 15.5l2.6-.9Z']),
+  FolderIcon:lineIcon(['M2.5 5.5A1.5 1.5 0 0 1 4 4h4l2 2h6A1.5 1.5 0 0 1 17.5 7.5v7A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5Z']),
   // Same cloud and arrow geometry as the pinned upstream CloudDownloadIcon.
   ServerIcon:lineIcon(['M4 3.5h12v5H4z','M4 11.5h12v5H4z','M6.5 6h.1M6.5 14h.1']),
   ChevronDownIcon:lineIcon(['m5 7.5 5 5 5-5']),
@@ -17,7 +27,7 @@ const menuIcons={
   WhisperIcon:{tag:'svg',props:{width:20,height:20,viewBox:'0 0 20 20','aria-hidden':true},children:[{tag:'path',props:{d:'M3 10h1.5m2-3v6m2-8v10m2-7v4m2-6v8m2-5v2m2-1h1.5',fill:'none',stroke:'currentColor','stroke-width':1.8,'stroke-linecap':'round'}}]},
   CustomApiIcon:{tag:'svg',props:{width:20,height:20,viewBox:'0 0 20 20','aria-hidden':true},children:[{tag:'path',props:{d:'M4 5h12M4 10h12M4 15h12',fill:'none',stroke:'currentColor','stroke-width':1.6,'stroke-linecap':'round'}},{tag:'circle',props:{cx:8,cy:5,r:1.8,fill:'currentColor'}},{tag:'circle',props:{cx:13,cy:10,r:1.8,fill:'currentColor'}},{tag:'circle',props:{cx:7,cy:15,r:1.8,fill:'currentColor'}}]},
   GithubIcon:{tag:'svg',props:{width:20,height:20,viewBox:'0 0 16 16',fill:'currentColor','aria-hidden':true},children:[{tag:'path',props:{d:'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z'}}]},
-  VoiceIcon:lineIcon(['M3 8v4M6.5 5v10M10 2v16M13.5 5v10M17 8v4']),
+  VoiceIcon:lineIcon(['M3 8v4M5.8 5.5v9M8.6 3v14M11.4 6v8M14.2 4.5v11M17 8v4']),
   InfoIcon:lineIcon(['M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z','M10 9v5M10 6h.01']),
   KeyIcon:lineIcon(['M8.5 11.5a4 4 0 1 1 0-5.7 4 4 0 0 1 0 5.7Z','M8.5 11.5L15 18l2-2-2-2 1.5-1.5-2-2-1.5 1.5']),
   PlugIcon:lineIcon(['M7 2v4M13 2v4M5 6h10v2a5 5 0 0 1-10 0Z','M10 13v5']),

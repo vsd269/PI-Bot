@@ -5,6 +5,8 @@ import {soft,row,section,choose,segments,href,textInput} from './settings-ui.mjs
 import {THEMES} from './upstream/themes.mjs';
 import {ACCENT_INKS,INKS} from './upstream/inks.mjs';
 import {createUsagePage} from './settings-usage.mjs';
+import {avatarImage} from './avatar-editor.mjs';
+import {profileLook} from './profile-avatar.mjs';
 // PI Bot project links; upstream attribution is kept separately.
 const REPO='https://github.com/vsd269/PI-Bot';
 const UPSTREAM='https://github.com/Fei2411/DeepSeek-Bot';
@@ -15,6 +17,18 @@ export function createSettingsPages({body,show,call,getState,update,savePreferen
   let feedbackDraft='';
   function general(){
     show('通用',{page:'general'});const prefs=getState().prefs||{};
+    const profile=el('div','','pi-profile-avatar'),picture=el('span','','pi-profile-picture'),actions=el('div','','bt-actions'),status=el('p','','pi-profile-status');
+    const file=el('input');file.type='file';file.accept='image/png,image/jpeg,image/webp,image/gif';file.hidden=true;file.setAttribute('aria-label','选择我的头像');
+    const upload=soft('更换头像',()=>file.click()),reset=soft('恢复默认');reset.onclick=()=>persistProfile(null);status.setAttribute('role','status');
+    function syncProfile(){const image=getState().prefs?.profileAvatar;picture.replaceChildren(avatar(profileLook(image),40,false,false));reset.disabled=!image;}
+    async function persistProfile(image){
+      upload.disabled=reset.disabled=true;status.textContent='正在保存头像…';
+      try{if(savePreferences)await savePreferences({profileAvatar:image});else update(await call('team.prefs',{profileAvatar:image}));status.textContent=image?'头像已更新。':'已恢复默认头像。';}
+      catch(error){status.textContent='头像没有保存，请重试。';}
+      finally{upload.disabled=false;syncProfile();}
+    }
+    file.onchange=async()=>{const selected=file.files?.[0];file.value='';if(!selected)return;upload.disabled=reset.disabled=true;status.textContent='正在处理图片…';try{await persistProfile(await avatarImage(selected));}catch(error){status.textContent=error.message||'图片无法读取，请换一张。';}finally{upload.disabled=false;syncProfile();}};
+    syncProfile();actions.append(upload,reset);profile.append(picture,actions,file);body.append(section('我的头像',row('侧栏头像','显示在左下角的设置入口。支持 PNG、JPEG、WebP、GIF。',profile)),status);
     const appearance=choose('明暗模式',[['host','跟随 PI Desktop'],['light','浅色'],['dark','深色']],prefs.appearanceMode==='independent'?prefs.appearance||'light':'host',safe(async value=>{
       await savePrefs(value==='host'?{appearanceMode:'host'}:{appearanceMode:'independent',appearance:value});
       const current=getState().prefs||{};appearance.value=current.appearanceMode==='independent'?current.appearance||'light':'host';
@@ -84,12 +98,12 @@ export function createSettingsPages({body,show,call,getState,update,savePreferen
     const report=el('div','','bt-set-row bt-set-paste bt-fb-what'),copy=el('label','','bt-set-copy');copy.append(el('span','发生了什么？'),el('span','你做了什么、期望什么、实际发生了什么。','bt-set-hint'));report.append(copy,what);
     const preview=el('div','','bt-set-row bt-fb-preview'),pre=el('pre');pre.tabIndex=0;preview.append(pre);preview.hidden=true;let diagnostic;
     const load=async()=>{const data=await call('team.extensions',{action:'diagnostics'});diagnostic=JSON.stringify(data,null,2);pre.textContent=diagnostic;return data;};
-    const issue=href('在 GitHub 上报告',REPO+'/issues/new');issue.className='bt-fb-primary bt-about-link';issue.onclick=()=>{issue.href=REPO+'/issues/new?title='+encodeURIComponent('[PI Desktop 适配] '+(what.value.slice(0,70)||'问题反馈'))+'&body='+encodeURIComponent('PI Bot 0.3.84（PI-Desktop 适配版）\n\n'+what.value+'\n\n请在提交前检查内容；如有需要，将诊断信息复制到此处。');};
+    const issue=href('在 GitHub 上报告',REPO+'/issues/new');issue.className='bt-fb-primary bt-about-link';issue.onclick=()=>{issue.href=REPO+'/issues/new?title='+encodeURIComponent('[PI Desktop 适配] '+(what.value.slice(0,70)||'问题反馈'))+'&body='+encodeURIComponent('PI Bot 0.3.101（PI-Desktop 适配版）\n\n'+what.value+'\n\n请在提交前检查内容；如有需要，将诊断信息复制到此处。');};
     body.append(section('报告问题',report,row('诊断信息','版本、系统和最近的错误；不包含聊天正文或密钥。',soft('查看',()=>{preview.hidden=!preview.hidden;}),soft('复制',safe(async()=>{await load();try{await navigator.clipboard.writeText(diagnostic);notice('已复制诊断信息。');}catch{preview.hidden=false;notice('请在下方选中文字复制。');}}))),preview,row('GitHub issue','打开问题草稿，检查后由你提交。',issue)));
     try{const data=await load();if(!isCurrent(token))return;const errors=[...(data.events||[]),...(data.errors||[])].slice(-8).reverse(),list=section('最近的错误 · '+errors.length);if(!errors.length)list.querySelector('.bt-set-card').append(row('暂无错误。',''));for(const entry of errors){const r=row(entry.message||entry.text||entry.error||entry.event||(entry.module&&entry.code?entry.module+' / '+entry.code:'诊断事件'),entry.at||entry.time||'');r.classList.add('bt-fb-entry');r.prepend(el('span','','bt-fb-dot'));list.querySelector('.bt-set-card').append(r);}body.append(list);const actions=el('div','','bt-actions');actions.append(soft('下载诊断',()=>download('PI-bot-diagnostics.json',diagnostic,'application/json')));body.append(actions);}catch(e){if(isCurrent(token))notice(e.message);}
   }
   function about(){
-    const ticket=show('关于 PI Bot',{page:'about'});const hero=el('div','','bt-about-hero'),copy=el('div','','bt-about-copy');copy.append(el('span','PI Bot','bt-about-name'),el('span','版本 0.3.93','bt-about-version'));const star=href('☆ Star',REPO);star.classList.add('bt-star');hero.append(avatar({avatar:{shape:'pi-bot'},color:'deepseek'},52,false,false),copy,star);
+    const ticket=show('关于 PI Bot',{page:'about'});const hero=el('div','','bt-about-hero'),copy=el('div','','bt-about-copy');copy.append(el('span','PI Bot','bt-about-name'),el('span','版本 0.3.101','bt-about-version'));const star=href('☆ Star',REPO);star.classList.add('bt-star');hero.append(avatar({avatar:{shape:'pi-bot'},color:'deepseek'},52,false,false),copy,star);
     body.append(hero,el('p','源自 DS Bot，适配 PI-Desktop。','bt-about-ask'),updatePanel(ticket),section('客户端',row('PI-Desktop','客户端版本与更新由 PI-Desktop 管理。',soft('打开设置',()=>onNative()))),section('链接',row('源代码','github.com/vsd269/PI-Bot',href('打开',REPO)),row('发布说明','PI Bot 的版本更新与安装包',href('打开',REPO+'/releases')),row('报告问题','PI Bot 的问题反馈',soft('打开',()=>feedback())),row('上游项目','基于 DS Bot 学习与适配，保留原作者署名和 Apache-2.0 许可证。',href('DS Bot',UPSTREAM))));
     body.append(section('PI 扩展',row('备份与恢复','Bot、群聊、记忆与 Skill 资源。',soft('打开',legacy.backups)),row('扩展功能','语音、浏览器、OCR、索引与 Bot API。',soft('打开',legacy.extensions)),row('任务恢复中心','核对、继续或重试未完成任务。',soft('打开',legacy.recovery)),row('外观同步与记忆','PI 外观跟随和自动记忆选项。',soft('打开',legacy.preferences)),row('聊天历史','搜索 Bot 和群聊记录。',soft('打开',()=>legacy.history()))));
   }
@@ -100,7 +114,7 @@ export function createSettingsPages({body,show,call,getState,update,savePreferen
       try{localStorage.setItem(UPDATE_PREF,value);}catch{notice('无法保存自动检查设置。');return;}
       window.dispatchEvent(new Event(UPDATE_EVENT));
     });
-    const panel=section('PI Bot 更新',row('当前版本 0.3.93','检查你自己的 GitHub 仓库正式发布版本。',check),row('更新状态','',status),row('自动检查','打开 PI Bot 时在后台检查，之后每 6 小时检查一次。',enabled),row('安装新版','0.3.80 及更早版本请先停用旧版，再导入新版；首次启动会迁移旧数据。',links));
+    const panel=section('PI Bot 更新',row('当前版本 0.3.101','检查你自己的 GitHub 仓库正式发布版本。',check),row('更新状态','',status),row('自动检查','打开 PI Bot 时在后台检查，之后每 6 小时检查一次。',enabled),row('安装新版','0.3.80 及更早版本请先停用旧版，再导入新版；首次启动会迁移旧数据。',links));
     async function load(force=false){
       check.disabled=true;status.textContent='正在检查更新…';links.replaceChildren();
       try{

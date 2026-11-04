@@ -2,7 +2,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 export function panelCapture(call){
   // Serialize begin/abort so a late old begin cannot steal a resumed session.
   let startup=Promise.resolve(),release=Promise.resolve();
-  return async({botId,signal,onTranscribing,realtime=false}={})=>{
+  return async({botId,signal,onTranscribing,realtime=false,mode='call'}={})=>{
     const previous=startup;let unlock;startup=new Promise(resolve=>unlock=resolve);
     let id='',ended=false,level=0,partial='',polling=false,error,lastRead=0;
     const cancel=()=>{if(!id)return release;const recordId=id;id='';release=call('team.microphone',{action:'cancel',id:recordId}).catch(()=>{});return release;};
@@ -18,9 +18,9 @@ export function panelCapture(call){
     try{
       await previous;await release;if(signal?.aborted)throw Error('录音已取消。');
       signal?.addEventListener('abort',abort,{once:true});
-      ({id}=await call('team.microphone',{action:'begin',botId,realtime,deviceId:localStorage.getItem('pi-bot.microphone-native')||''}));
+      ({id}=await call('team.microphone',{action:'begin',botId,realtime,mode,deviceId:localStorage.getItem('pi-bot.microphone-native')||''}));
       if(signal?.aborted||ended){await cancel();throw Error('录音已取消。');}
-      for(const start=Date.now();;){const value=await read();if(value.status==='listening')break;if(Date.now()-start>30000)throw Error('麦克风开启超时，请检查录音设备后重试。');await delay(300);}
+      for(const start=Date.now();;){const value=await read();if(value.status==='listening')break;if(Date.now()-start>30000)throw Error('麦克风开启超时，请检查录音设备后重试。');await delay(100);}
     }catch(e){signal?.removeEventListener('abort',abort);await cancel();throw e;}finally{unlock();}
     const refresh=async()=>{
       if(ended||polling||Date.now()-lastRead<100)return;polling=true;lastRead=Date.now();
@@ -34,7 +34,7 @@ export function panelCapture(call){
         if(ended)return null;ended=true;
         try{
           await call('team.microphone',{action:'finish',id});
-          for(const start=Date.now();;){const value=await read();if(value.status==='done'){id='';return {transcript:value.text||''};}if(Date.now()-start>110000)throw Error('录音转写超时，请重新尝试。');await delay(300);}
+          for(const start=Date.now();;){const value=await read();if(value.status==='done'){id='';return {transcript:value.text||''};}if(Date.now()-start>110000)throw Error('录音转写超时，请重新尝试。');await delay(100);}
         }catch(e){await cancel();throw e;}finally{signal?.removeEventListener('abort',abort);}
       },
     };

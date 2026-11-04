@@ -86,6 +86,8 @@ async function answerView(team,input){
 }
 function supersedeViews(team,botId,options={}){
   const edit=new StateEdit();
+  // Greeting choices are a durable invitation, not a running tool view. Only
+  // an explicit answer/dismissal may settle them, including after other work.
   if(!options.fromBotId&&!String(options.clientMessageId||'').startsWith('view-'))for(const view of team.state.views||[])if(view.botId===botId&&view.status==='pending')edit.set(view,'status','superseded');
   return edit;
 }

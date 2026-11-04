@@ -14,12 +14,17 @@ export function replyDuration(value){
 export function stampMessages(transcript,lines){
   const rows=new Map([...transcript.querySelectorAll('[data-line-id]')].map(node=>[node.dataset.lineId,node]));
   for(const line of lines){
-    const row=rows.get(line.id);if(!row||row.querySelector('.pi-message-meta'))continue;
+    const row=rows.get(line.id);if(!row)continue;
     const time=messageTime(line.at),duration=!line.progress&&line.who!=='User'?replyDuration(line.durationMs):'';
-    if(!time&&!duration)continue;
-    const meta=el('span','','pi-message-meta');
-    if(time){const clock=el('time',time.label);clock.dateTime=time.iso;clock.title=time.full;meta.append(clock);}
-    if(duration){const took=el('span','耗时 '+duration);took.title='从开始处理到本次回复结束';meta.append(took);}
-    const name=row.querySelector('.bt-group-name');if(name)name.append(meta);else row.append(meta);
+    let meta=row.querySelector('.pi-message-meta'),took=row.querySelector('.pi-message-duration');
+    if(time){
+      if(!meta){meta=el('span','','pi-message-meta');meta.append(el('time'));}
+      const clock=meta.querySelector('time');if(clock.dateTime!==time.iso){clock.textContent=time.label;clock.dateTime=time.iso;clock.title=time.full;}
+      const target=row.querySelector('.bt-tools')||row;if(meta.parentElement!==target)target.append(meta);
+    }else meta?.remove();
+    if(duration){
+      if(!took){took=el('span','','pi-message-duration');took.title='从开始处理到本次回复结束';(row.querySelector('.bt-group-name')||row).append(took);}
+      const label='耗时 '+duration;if(took.textContent!==label)took.textContent=label;
+    }else took?.remove();
   }
 }

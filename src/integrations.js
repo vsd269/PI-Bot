@@ -87,9 +87,9 @@ class Integrations{
     const botId=input.botId;if(input.scope!=='global')this.team.bot(botId);const c=speechConfig(input.config||{});const token=String(input.secret||'')||(c.keyRef?(input.scope==='global'?this.speechSecret(c.keyRef):this.team.vault.value(botId,c.keyRef)):'');
     const controller=new AbortController();this.controllers.add(controller);try{return await testSpeech(c,token,controller.signal);}finally{this.controllers.delete(controller);}
   }
-  async liveSpeech({onPartial,onError}={}){
+  async liveSpeech({onPartial,onError,mode='call'}={}){
     const saved=sharedSpeech(this.team.state.integrations,this.team.state.bots)?.config;if(!saved)throw Error('请先保存统一语音服务。');const choice=saved.callProvider||'auto',preferred=saved.profiles?.[saved.defaultProvider||saved.provider]||saved;
-    const realtime=base=>base?.provider==='qwen'?speechConfig({...base,model:saved.callModel||'fun-asr-realtime'}):base;const c=choice==='auto'?[preferred,...Object.values(saved.profiles||{})].map(realtime).find(isRealtime):realtime(saved.profiles?.[choice]||(saved.provider===choice?saved:null));if(!isRealtime(c))throw Error('请在语音设置中配置并保存阿里云实时模型或豆包 2.0；录音文件模型不能用于实时对话。');
+    const realtime=base=>base?.provider==='qwen'?speechConfig({...base,model:saved.callModel||'fun-asr-realtime'}):base;const c=mode==='dictation'?preferred:choice==='auto'?[preferred,...Object.values(saved.profiles||{})].map(realtime).find(isRealtime):realtime(saved.profiles?.[choice]||(saved.provider===choice?saved:null));if(mode==='dictation'&&!isRealtime(c))return null;if(c?.enabled===false)throw Error('默认语音服务已停用。');if(!isRealtime(c))throw Error('请在语音设置中配置并保存阿里云实时模型或豆包 2.0；录音文件模型不能用于实时对话。');
     const controller=new AbortController();const stream=openSpeechStream(c,this.speechSecret(c.keyRef),{onPartial:text=>onPartial?.(this.team.vault.redact(text)),onError:error=>onError?.(Error(this.team.vault.redact(error.message)))}),abort=()=>stream.cancel();this.controllers.add(controller);controller.signal.addEventListener('abort',abort,{once:true});
     const release=()=>{this.controllers.delete(controller);controller.signal.removeEventListener('abort',abort);};try{await stream.ready;}catch(e){release();stream.cancel();throw e;}
     return {push:bytes=>stream.push(bytes),async finish(){try{return await stream.finish();}finally{release();}},cancel(){release();stream.cancel();}};

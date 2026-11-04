@@ -6,12 +6,13 @@ import {el,icon} from './dom.mjs';
 export function createContextMenu({app,run,onError}){
   let menu=null,origin=null;
   const close=(restoreFocus=false)=>{leaveMenu(menu);menu=null;if(restoreFocus&&origin?.isConnected)origin.focus({preventScroll:true});origin=null;};
-  function open({x,y,label,groups,source,keyboard=false}){
-    close();origin=source;menu=el('div','','bt-menu pi-context-menu');menu.setAttribute('role','menu');menu.setAttribute('aria-label',label);
+  function open({x,y,label,groups,source,keyboard=false,className=''}){
+    close();origin=source;menu=el('div','','bt-menu pi-context-menu'+(className?' '+className:''));menu.setAttribute('role','menu');menu.setAttribute('aria-label',label);
     for(const [index,group] of groups.filter(g=>g.length).entries()){
       if(index){const line=el('div','','bt-menu-sep');line.setAttribute('role','separator');menu.append(line);}
       for(const item of group){
         const button=el('button','',item.danger?'bt-danger':'');button.type='button';button.tabIndex=-1;button.setAttribute('role','menuitem');button.append(icon(item.icon),el('span',item.label,'bt-menu-label'));
+        if(item.shortcut)button.append(el('kbd',item.shortcut));button.disabled=Boolean(item.disabled);
         button.onclick=()=>{
           if(item.danger&&!button.dataset.confirm){button.dataset.confirm='yes';button.querySelector('.bt-menu-label').textContent='再次点击确认删除';button.focus({preventScroll:true});return;}
           close();Promise.resolve().then(()=>run(item.action)).catch(onError);
@@ -20,7 +21,7 @@ export function createContextMenu({app,run,onError}){
     }
     menu.addEventListener('contextmenu',event=>event.preventDefault());
     app.append(menu);const width=menu.offsetWidth,height=menu.offsetHeight;Object.assign(menu.style,{left:Math.max(8,Math.min(x,innerWidth-width-8))+'px',top:Math.max(8,Math.min(y,innerHeight-height-8))+'px'});
-    if(keyboard)menu.querySelector('button')?.focus({preventScroll:true});
+    if(keyboard)menu.querySelector('button:not(:disabled)')?.focus({preventScroll:true});
   }
   const outside=event=>{if(menu&&!event.composedPath().includes(menu))close();};
   const key=event=>{
@@ -28,7 +29,8 @@ export function createContextMenu({app,run,onError}){
     if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close(true);return;}
     if(event.key==='Tab'){close();return;}
     if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;
-    event.preventDefault();event.stopPropagation();const buttons=[...menu.querySelectorAll('button')],active=event.composedPath().find(n=>buttons.includes(n)),index=buttons.indexOf(active);
+    event.preventDefault();event.stopPropagation();const buttons=[...menu.querySelectorAll('button:not(:disabled)')],active=event.composedPath().find(n=>buttons.includes(n)),index=buttons.indexOf(active);
+    if(!buttons.length)return;
     const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:event.key==='ArrowDown'?(index+1)%buttons.length:(index<0?buttons.length-1:(index-1+buttons.length)%buttons.length);buttons[next]?.focus({preventScroll:true});
   };
   const scroll=event=>{if(menu&&!event.composedPath().includes(menu))close();};

@@ -29,14 +29,22 @@ class Apps{
   status(){const c=this.config();return {configured:!!c,storage:this.team.vault.list().available?'encrypted':'unavailable',grants:(c?.grants||[]).map(g=>({...g,botIds:g.botIds.filter(v=>this.team.state.bots.some(b=>b.id===v))}))};}
   async api(c,path,{method='GET',body,signal,guard}={}){
     if(this.closed||this.team.stopped)throw Error('Composio 连接已关闭。');guard?.();
-    const controller=new AbortController();this.controllers.add(controller);
+    const controller=new AbortController(),deadline=AbortSignal.timeout(30000);this.controllers.add(controller);
+    let result;
     try{
-      const {response,text}=await this.transport(BASE+path,{method,headers:{'x-api-key':c.key,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.any([controller.signal,signal].filter(Boolean)),timeoutMs:30000},2*1024*1024);
-      // Never echo provider bodies: they may contain credentials or auth URLs.
-      if(!response.ok)throw Object.assign(Error(response.status===401?'Composio 项目密钥无效或已过期。':response.status===403?'Composio 拒绝访问，请检查项目权限、额度与应用授权配置。':`Composio 返回 HTTP ${response.status}。请检查控制台中的授权配置；操作未自动重试。`),{status:response.status});
-      if(!text)return {};try{return JSON.parse(text);}catch{throw Error('Composio 响应格式无效。');}
-    }catch(error){if(controller.signal.aborted||signal?.aborted)throw Error('应用操作已取消；如已提交修改，请先检查应用中的结果。');if(/Composio/.test(error.message))throw error;throw Error('应用服务连接失败或超时；操作未自动重试，请检查服务端结果。');}
+      result=await this.transport(BASE+path,{method,headers:{'x-api-key':c.key,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.any([controller.signal,deadline,signal].filter(Boolean)),timeoutMs:30000},2*1024*1024);
+    }catch(error){
+      const outcome=method==='GET'?'本次读取失败，原有连接和 Bot 分配未更改。':'操作未自动重试，请先检查服务端结果，避免重复提交。';
+      if(controller.signal.aborted||signal?.aborted)throw Error('应用操作已取消；如已提交修改，请先检查应用中的结果。');
+      if(error.code==='RESPONSE_TOO_LARGE')throw Object.assign(Error('Composio 返回的数据超过安全读取上限。'+outcome),{code:'APP_RESPONSE_TOO_LARGE'});
+      if(deadline.aborted||error.name==='TimeoutError'||['ETIMEDOUT','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT'].includes(error.cause?.code||error.code))throw Object.assign(Error('Composio 请求超时，请检查网络后重试。'+outcome),{code:'APP_TIMEOUT'});
+      throw Object.assign(Error('无法连接 Composio，请检查本机网络、代理设置或服务状态。'+outcome),{code:'APP_NETWORK'});
+    }
     finally{this.controllers.delete(controller);}
+    // Never echo transport errors or provider bodies: either may contain secrets.
+    const {response,text}=result;
+    if(!response.ok)throw Object.assign(Error(response.status===401?'Composio 项目密钥无效或已过期。':response.status===403?'Composio 拒绝访问，请检查项目权限、额度与应用授权配置。':response.status===429?'Composio 请求过于频繁或项目额度受限，请稍后再试。操作未自动重试。':`Composio 返回 HTTP ${response.status}。请检查控制台中的授权配置；操作未自动重试。`),{status:response.status});
+    if(!text)return {};try{return JSON.parse(text);}catch{throw Error('Composio 响应格式无效。');}
   }
   async saveKey(input){return this.mutate(async()=>{
     const key=String(input.key||'').trim();if(!/^ak_[a-zA-Z0-9_-]{8,500}$/.test(key))throw Error('请填写 Composio 项目 API Key（以 ak_ 开头）。');
