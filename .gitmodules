@@ -1,0 +1,3 @@
+[submodule "PI-Desktop"]
+	path = PI-Desktop
+	url = https://github.com/vastsa/PI-Desktop.git

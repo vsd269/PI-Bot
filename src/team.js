@@ -865,10 +865,11 @@ class Team {
     for(const key of ['bubbleWidth','textWidth'])if(input[key]!==undefined&&(!Number.isInteger(input[key])||input[key]<50||input[key]>100||input[key]%5))throw Error('消息宽度需要为 50–100，步进 5。');
     if(input.learningReview!==undefined&&typeof input.learningReview!=='boolean')throw Error('无效的工作经验复盘设置。');
     if(input.showThinking!==undefined&&typeof input.showThinking!=='boolean')throw Error('Invalid thinking visibility');
+    if(input.language!==undefined&&!['zh-CN','en'].includes(input.language))throw Error('Invalid interface language');
     // Let earlier writes take their snapshots before exposing tentative prefs.
     let pending;do{pending=this.writes;await pending;}while(pending!==this.writes);
     const prefs=this.state.prefs??={},edit=new StateEdit();
-    for(const key of ['theme','accent','motion','memoryReview','appearanceMode','appearance','messageLayout','bubbleWidth','textWidth','showThinking','learningReview'])if(input[key]!==undefined)edit.set(prefs,key,key==='memoryReview'?input[key]===true:input[key]);
+    for(const key of ['theme','accent','motion','memoryReview','appearanceMode','appearance','messageLayout','bubbleWidth','textWidth','showThinking','learningReview','language'])if(input[key]!==undefined)edit.set(prefs,key,key==='memoryReview'?input[key]===true:input[key]);
     await this.commitEdit(edit);
     return input.compact?{prefs:structuredClone(prefs)}:this.snapshot();
   }

@@ -33,6 +33,8 @@ const tick=()=>new Promise(r=>setImmediate(r));
   const team=new Team({});team.file=path.join(dir,'team.json');team.state={version:1,bots:[{id:'a',chat:[{text:'private '.repeat(100000)}]}],rooms:[],jobs:[],prefs:{theme:'deepseek',appearance:'light'}};team.queueCheckpoint=()=>{};
   team.snapshot=()=>{throw Error('compact preference save must not build full snapshot');};
   const result=await team.preferences({appearanceMode:'independent',appearance:'dark',compact:true});assert.deepEqual(Object.keys(result),['prefs']);assert(JSON.stringify(result).length<200);
+  await team.preferences({language:'en',compact:true});assert.equal(team.state.prefs.language,'en');
+  await assert.rejects(team.preferences({language:'fr',compact:true}),/Invalid interface language/);
   assert.equal(JSON.parse(await fs.readFile(team.file,'utf8')).prefs.appearance,'dark');
   await assert.rejects(team.preferences({theme:'paper',motion:'invalid',compact:true}));assert.equal(team.state.prefs.theme,'deepseek');
   const goodSave=team.save.bind(team);team.save=async rollback=>{team.state.bots[0].chat.push({text:'concurrent chat'});rollback?.();throw Error('write denied');};
