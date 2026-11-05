@@ -14,7 +14,16 @@ PI Bot 是基于 [DS Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习、迁�
 
 感谢 DS Bot 原作者的开源工作。本项目是独立维护的衍生适配版，不是 DS Bot 的官方发行版，也不声称所有能力与上游完全一致。
 
-本次 GitHub 发布合并 0.3.94～0.3.101。完整变化及功能入口见 [合并更新说明](docs/MARKETPLACE-0.3.101-FULL.md)，安装与验证范围见 [GitHub 发布说明](docs/GITHUB-RELEASE-0.3.101.md)。
+<p align="center">
+  <img src="docs/images/pi-bot-overview.png" width="1480" alt="PI Bot 界面演示：左侧是不同头像和分工的助手，中间展示管理员、资料研究员、文案写手与视觉设计师在群聊中协作完成内容方案。" />
+</p>
+<p align="center"><sub>真实插件界面 · 模拟聊天示例：让不同专长的 Bot 在同一个群聊中一起工作。</sub></p>
+
+最新正式版本为 **0.3.107**，汇总 0.3.102～0.3.107 的优化。完整内容见 [合并更新说明](docs/RELEASE-0.3.107.md)，安装包见 [GitHub Releases](https://github.com/vsd269/PI-Bot/releases/latest)。
+
+## 0.3.107 更新：侧栏分类、记忆检索与聊天体验
+
+新增群组聊天分类和自定义部门，支持拖动排序、跨部门移动及悬停菜单。长期记忆先检索索引、再按需读取正文，历史消息支持前后文回看；表情即时反馈，补齐私聊停止按钮并修复重复运行状态。优化透明渐变顶栏、侧栏渐隐与滚动条显示。详见 [本版说明](docs/RELEASE-0.3.107.md)。
 
 ## 0.3.101 更新：消息阅读与实时反馈
 

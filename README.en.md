@@ -4,7 +4,16 @@ Persistent Bot teams for **PI Desktop**. [简体中文](README.md)
 
 PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/Fei2411/DeepSeek-Bot), developed by learning from and porting its open-source implementation to PI Desktop's plugin APIs. Thanks to the upstream author and contributors. This is not an official DS Bot distribution, and it does not claim complete feature parity.
 
-This GitHub release includes changes from 0.3.94 through 0.3.101. See the [combined release notes](docs/GITHUB-RELEASE-0.3.101.md) for features, installation, and validation limits.
+<p align="center">
+  <img src="docs/images/pi-bot-overview.png" width="1480" alt="PI Bot interface preview: a sidebar of distinct Bot avatars and a group conversation where a coordinator, researcher, writer, and designer work on a content plan." />
+</p>
+<p align="center"><sub>Actual plugin interface with simulated conversation content. Bots with different specialties work together in one group chat.</sub></p>
+
+The latest stable release is **0.3.107**, combining changes from 0.3.102 through 0.3.107. See the [combined release notes](docs/RELEASE-0.3.107.md) and [download the plugin](https://github.com/vsd269/PI-Bot/releases/latest).
+
+## New in 0.3.107
+
+Adds group-chat categories, custom departments, drag sorting, cross-department moves, and hover menus. Memory recall returns an index before retrieving individual entries, and history search can show surrounding messages. Reactions respond immediately; private chats show a stop button during work, and duplicate running states are removed. Refines the fading chat header, sidebar edges, and hover-only left scrollbar. See [release notes](docs/RELEASE-0.3.107.md).
 
 ## New in 0.3.101
 
