@@ -1,6 +1,10 @@
 import {el} from './dom.mjs';
 
 const active=new Set(['queued','launching','running','waiting','waiting_teammates']);
+export const isWorkingStatus=status=>active.has(status);
+export function workingJobs(state,selection){
+  return state.jobs.filter(job=>isWorkingStatus(job.status)&&(selection?.kind==='room'?job.roomId===selection.id:selection?.kind==='bot'&&job.botId===selection.id&&!job.roomId));
+}
 const tools={read:'正在读取文件',read_file:'正在读取文件',write:'正在写入文件',write_file:'正在写入文件',edit:'正在修改文件',apply_patch:'正在修改文件',bash:'正在执行命令',shell:'正在执行命令',exec_command:'正在执行命令',web_search:'正在搜索资料',message_bot:'正在联系队友'};
 export function workingLabel(job){
   if(job.status==='waiting')return '等待你的批准';
@@ -17,7 +21,7 @@ export function createWorkingStatus({transcript,avatar}){
   const node=el('div','','pi-working-status');node.setAttribute('role','status');let key='';
   return {update(state,selection,{pending=false,liveProgress=()=>''}={}){
     const room=selection?.kind==='room'?state.rooms.find(r=>r.id===selection.id):null;
-    const jobs=state.jobs.filter(j=>active.has(j.status)&&(room?j.roomId===room.id:selection?.kind==='bot'&&j.botId===selection.id&&!j.roomId));
+    const jobs=workingJobs(state,selection);
     const rank={waiting:0,running:1,launching:2,queued:3,waiting_teammates:4},seen=new Set();
     const rows=jobs.sort((a,b)=>rank[a.status]-rank[b.status]).filter(j=>{if(seen.has(j.botId))return false;seen.add(j.botId);return true;}).map(job=>({bot:state.bots.find(b=>b.id===job.botId),job})).filter(r=>r.bot);
     if(room?.planning&&!rows.some(r=>r.bot.id===room.adminId)){const admin=state.bots.find(b=>b.id===room.adminId);if(admin)rows.unshift({bot:admin,job:{status:'running',activityPhase:'planning'}});}

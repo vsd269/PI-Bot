@@ -15,6 +15,23 @@ async function fixture(ctx){
   return {team,dir,calls};
 }
 function completed(team,dir){const job={id:'finished',botId:'a',task:'完成文档检查并核对结果',status:'completed',result:'已核对结构和链接，输出通过检查。',toolEvents:[{name:'check',status:'completed'}],at:'2026-10-30T02:00:00Z',endedAt:'2026-10-30T02:05:00Z',durationMs:300000,workDir:dir};team.state.jobs.push(job);return job;}
+
+test('private composer cancellation interrupts its native turn and queued work without touching other chats',async ctx=>{
+  const {team:t,calls}=await fixture(ctx),{workingJobs}=await import('../renderer/working-status.mjs');
+  t.state.jobs.push(
+    {id:'private-live',botId:'a',task:'执行私聊',status:'running',sessionId:'private-session',turnId:'private-turn',progress:'已有回复'},
+    {id:'private-queued',botId:'a',task:'排队私聊',status:'queued'},
+    {id:'private-waiting',botId:'a',task:'等待交回',status:'waiting_teammates',result:'等待交回'},
+    {id:'group-live',botId:'a',task:'群聊',roomId:'room',status:'running',sessionId:'group-session',turnId:'group-turn'},
+    {id:'other-private',botId:'b',task:'其他私聊',status:'running',sessionId:'other-session',turnId:'other-turn'}
+  );
+  await Promise.all(workingJobs(t.state,{kind:'bot',id:'a'}).map(job=>t.cancel(job.id)));
+  assert.deepEqual(calls.filter(c=>c.operation==='agent/abort').map(c=>c.args[0]),[{sessionId:'private-session',turnId:'private-turn'}]);
+  assert.equal(t.state.jobs[0].cancelled,true);assert.equal(t.state.jobs[0].progress,'已有回复');
+  assert.equal(t.state.jobs[1].status,'aborted');assert.equal(t.state.jobs[2].status,'aborted');
+  assert.equal(t.state.jobs[3].cancelled,undefined);assert.equal(t.state.jobs[4].cancelled,undefined);
+  const saved=JSON.parse(await fs.readFile(t.file,'utf8'));assert.equal(saved.jobs[0].cancelled,true);assert.equal(saved.jobs[1].status,'aborted');
+});
 const skill={name:'document-review',description:'检查文档结构与结果',content:'先核对结构，再核对实际输出，记录尚未验证的内容。',reason:'下次可复用本次核对步骤。'};
 
 test('stop-all invalidates queued admissions and preserves unrelated group/private work',async ctx=>{

@@ -43,7 +43,7 @@ async function installTools(team){
     return dispatchMessageBot(team,{...args,request_id:'legacy-'+randomUUID()},owner,ctx);
   },'medium');
   await register('check_delegation','Read the saved status of a message_bot request sent by this Bot. This is not proof that outputs passed independent verification. Use on demand, never in a polling loop.',{request_id:field('The original request_id')},['request_id'],async(args,owner)=>JSON.stringify(delegationStatus(team,owner,args.request_id)));
-  const historyFields={around:field('Exact message ID or unique text anchor; show surrounding messages'),query:field('Search text; all whitespace-separated words must match'),before:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}};
+  const historyFields={around:field('Exact message ID or unique text anchor; show surrounding messages'),query:field('Search text; all whitespace-separated words must match; matching messages include nearby context'),context:{type:'integer',minimum:0,maximum:5,description:'Messages before and after each search match; defaults to 2'},before:{type:'integer',minimum:0},limit:{type:'integer',minimum:1,maximum:100}};
   function pickRoom(value,owner){
     const rooms=team.state.rooms.filter(r=>visible(owner,r));
     const matches=value?rooms.filter(r=>r.name===value||r.id===value):owner.room?rooms.filter(r=>r.id===owner.room.id):rooms;

@@ -12,6 +12,7 @@ export function createContextMenu({app,run,onError}){
       if(index){const line=el('div','','bt-menu-sep');line.setAttribute('role','separator');menu.append(line);}
       for(const item of group){
         const button=el('button','',item.danger?'bt-danger':'');button.type='button';button.tabIndex=-1;button.setAttribute('role','menuitem');button.append(icon(item.icon),el('span',item.label,'bt-menu-label'));
+        if(item.chevron)button.append(icon('ChevronRightIcon'));
         if(item.shortcut)button.append(el('kbd',item.shortcut));button.disabled=Boolean(item.disabled);
         button.onclick=()=>{
           if(item.danger&&!button.dataset.confirm){button.dataset.confirm='yes';button.querySelector('.bt-menu-label').textContent='再次点击确认删除';button.focus({preventScroll:true});return;}

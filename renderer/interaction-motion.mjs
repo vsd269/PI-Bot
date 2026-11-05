@@ -58,11 +58,12 @@ export function createInteractionMotion(app){
 
 export function createListMotion(list){
   const animations=new Set();let baseline=false;
-  const positions=()=>new Map([...list.querySelectorAll('[data-id]')].map(n=>[n.dataset.id,n.offsetTop]));
+  const top=node=>node.getBoundingClientRect().top-list.getBoundingClientRect().top+list.scrollTop;
+  const positions=()=>new Map([...list.querySelectorAll('[data-id]')].filter(n=>n.getClientRects().length).map(n=>[n.dataset.id,top(n)]));
   return {before:positions,after(before){const moving=baseline&&!reducedMotion();baseline=true;if(!moving)return;
-    for(const node of list.querySelectorAll('[data-id]')){const old=before.get(node.dataset.id);let animation;
+    for(const node of list.querySelectorAll('[data-id]')){if(!node.getClientRects().length)continue;const old=before.get(node.dataset.id);let animation;
       if(old===undefined)animation=node.animate([{opacity:0,filter:'blur(4px)'},{opacity:1,filter:'blur(0)'}],{duration:180,easing:'ease-out'});
-      else if(Math.abs(old-node.offsetTop)>.5)animation=node.animate([{transform:`translateY(${old-node.offsetTop}px)`},{transform:'none'}],{duration:SPRING_LIST.duration,easing:SPRING_LIST.easing});
+      else if(Math.abs(old-top(node))>.5)animation=node.animate([{transform:`translateY(${old-top(node)}px)`},{transform:'none'}],{duration:SPRING_LIST.duration,easing:SPRING_LIST.easing});
       if(animation){animation.id='bt-list-flip';animations.add(animation);animation.finished.then(()=>animations.delete(animation),()=>animations.delete(animation));}
     }
   },dispose(){for(const animation of animations)animation.cancel();animations.clear();}};

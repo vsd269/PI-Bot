@@ -3,7 +3,7 @@ import {el,icon} from './dom.mjs';
 
 // Port of upstream NewChat: recipients first, then group admin and members.
 // PI sessions use the plugin's existing room.save and outbox instead of DSH APIs.
-export function createNewChat({host,trigger,getBots,avatar,openBot,openSettings,createRoom,send,onOpen,onError}){
+export function createNewChat({host,trigger,getBots,avatar,openBot,openSettings,openDepartment,createRoom,send,onOpen,onError}){
   const pane=el('div','','bt-newchat pi-new-chat');
   pane.hidden=true;pane.setAttribute('role','dialog');pane.setAttribute('aria-label','新建聊天');
   const to=el('div','','bt-to'),label=el('span','发给：','bt-to-label'),tokens=el('span','','pi-recipients');
@@ -40,6 +40,7 @@ export function createNewChat({host,trigger,getBots,avatar,openBot,openSettings,
     input.disabled=message.disabled=busy;
     options=[];
     if(!group&&!wanted){options.push({label:'新建 Bot',ico:'PlusIcon',run:startBot},{label:'新建群聊',ico:'PeopleIcon',run:()=>{group=true;cursor=0;draw();input.focus();}});}
+    if(!group&&!wanted&&openDepartment)options.push({label:'新建部门',ico:'FolderIcon',run:()=>{close();openDepartment();}});
     for(const bot of bots().filter(bot=>(!group||!bot.private)&&bot.id!==admin&&!picked.includes(bot.id)&&(!wanted||[bot.name,bot.role].some(value=>String(value||'').toLowerCase().includes(wanted))))){options.push({label:bot.name,bot,hint:choosing?'设为管理员':group?'加入群聊':'',run:()=>pick(bot)});}
     if(!group&&wanted&&!bots().some(bot=>bot.name.toLowerCase()===wanted))options.push({label:'新建 Bot “'+input.value.trim()+'”',ico:'PlusIcon',run:startBot});
     cursor=Math.max(0,Math.min(cursor,options.length-1));list.replaceChildren();

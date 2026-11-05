@@ -25,6 +25,23 @@ test('group remember defaults to group; private and other group cannot read it',
   assert.equal((await t.memory.view('worker')).entries.length,0);assert.equal((await t.memory.endpoint('memory-view',{roomId:'roomB'})).entries.length,0);
   assert(!t.memory.section(t.bot('worker'),'private-worker').includes('紫杉'));assert(!t.memory.section(t.bot('worker'),'native-B').includes('紫杉'));assert(t.memory.section(t.bot('worker'),'native-A').includes('紫杉'));
   assert.equal((await fs.readFile(path.join(t.data,'memory/groups/roomA/MEMORY.md'),'utf8')).includes('紫杉'),true);
+  const recall=t.memory.tools.get('recall'),groupIndex=await recall.execute({query:'紫杉'},{agent:{id:'native-A'}}),groupRef=/\[(mem-[\w-]+)\]/.exec(groupIndex)?.[1];assert(groupRef);
+  assert.match(await recall.execute({ref:groupRef},{agent:{id:'native-B'}}),/no longer available/);
+});
+test('recall returns a compact dated index and a ref reads only its full entry',async ctx=>{
+  const t=await fixture(ctx,{memory:true}),remember=t.memory.tools.get('remember'),recall=t.memory.tools.get('recall'),exec={agent:{id:'private-worker'}};
+  await remember.execute({text:'用户偏好详细的阶段性报告，并要求每一阶段附上验证证据。'},{agent:exec.agent});
+  const index=await recall.execute({query:'阶段性 报告'},{agent:exec.agent}),ref=/\[(mem-[\w-]+)\]/.exec(index)?.[1];
+  assert(ref);assert.match(index,/MEMORY\.md/);assert.match(index,/\d{4}-\d{2}-\d{2}/);assert(!index.includes('source:'));
+  assert.match(await recall.execute({},{agent:exec.agent}),/Memory index .*call recall with a ref/);
+  const detail=await recall.execute({ref},{agent:exec.agent});assert.match(detail,/验证证据/);assert.match(detail,/source:/);
+  await t.memory.tools.get('forget').execute({entry:'用户偏好详细的阶段性报告'},{agent:exec.agent});
+  assert.match(await recall.execute({ref},{agent:exec.agent}),/no longer available/);
+});
+test('history keyword search returns bounded neighboring rows and marks the match',()=>{
+  const {pageLines}=require('../src/coordination'),rows=Array.from({length:30},(_,i)=>({id:String(i),text:i===12?'预算核对目标':'普通对话 '+i}));
+  const result=pageLines(rows,{query:'预算 核对',context:2,limit:50});assert.deepEqual(result.rows.map(row=>row.id),['10','11','12','13','14']);assert.equal(result.rows.filter(row=>row.matched).map(row=>row.id).join(','),'12');
+  const bounded=pageLines(rows.map(row=>({...row,text:'预算核对 '+row.text})),{query:'预算',context:5,limit:100});assert(bounded.rows.length<=100);
 });
 test('new group updates ownership maps; main Bot and direct UI can add group entries',async ctx=>{
   const t=await fixture(ctx,{memory:true});t.state.rooms.push({id:'newRoom',name:'新群',members:['admin','worker'],adminId:'admin',log:[]});

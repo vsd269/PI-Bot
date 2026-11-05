@@ -100,6 +100,7 @@ class Team {
       if(value.version !== 1 || !['bots','rooms','jobs'].every(k=>Array.isArray(value[k])))throw new Error('Invalid team file');
       this.state=await this.longMessages.restore(value);
     } catch(error) { if(error.code !== 'ENOENT')throw error; }
+    require('./sidebar-sections').validateSidebarSections(this.state);
     this.executionLog.restore(this.state);
     if(!this.state.bots.length)this.state.bots.push({id:randomUUID(),name:'Chief',role:'Administrator',instructions:'Coordinate the team.',modelKey:'',memory:''});
     for(const bot of this.state.bots)if(bot.chat)for(const line of bot.chat)line.id??=randomUUID();
@@ -871,12 +872,23 @@ class Team {
   answerQuestion(input){return answerQuestion(this,input);}
   async pin(input){const item=input.kind==='room'?this.room(input.id):this.bot(input.id);if(Object.hasOwn(input,'pinned'))item.pinned=input.pinned===true;if(Object.hasOwn(input,'unread'))item.unread=input.unread===true;if(Object.hasOwn(input,'hidden')){if(input.kind!=='room'&&item.role==='Administrator'&&input.hidden)throw Error('主机器人始终显示在侧栏。');item.hidden=input.hidden===true;}await this.save();return this.snapshot();}
   async react(input){
-    const rows=linesOf(this,input.kind==='room'?'room':'bot',input.id);if(!rows.some(l=>l.id===input.lineId))throw new Error('消息不存在。');
-    if(!['👍','❤️','😂','😮','😢','🙏'].includes(input.emoji))throw new Error('无效的反应。');
-    const original=input.kind==='room'?this.room(input.id).log.find(l=>l.id===input.lineId):this.bot(input.id).chat?.find(l=>l.id===input.lineId);
-    if(original)original.reaction=original.reaction===input.emoji?null:input.emoji;
-    else{const job=this.state.jobs.find(j=>input.lineId===j.id+':input'||input.lineId===j.id+':result');if(job){job.reactions??={};job.reactions[input.lineId]=job.reactions[input.lineId]===input.emoji?null:input.emoji;}}
-    await this.save();return this.snapshot();
+    const kind=input.kind==='room'?'room':'bot',explicit=Object.hasOwn(input,'reaction'),wanted=explicit?input.reaction:input.emoji;
+    if(!(explicit&&wanted===null)&&!['👍','❤️','😂','😮','😢','🙏'].includes(wanted))throw new Error('无效的反应。');
+    const edit=new StateEdit();let reaction;
+    try{await this.save(()=>edit.rollback(),()=>{
+      // Resolve inside the write queue: failed writes cannot leak tentative
+      // reactions to a later save, and deleted conversations stay deleted.
+      const item=kind==='room'?this.room(input.id):this.bot(input.id);
+      const rows=linesOf(this,kind,input.id);if(!rows.some(l=>l.id===input.lineId))throw new Error('消息不存在。');
+      const original=(kind==='room'?item.log:item.chat)?.find(l=>l.id===input.lineId);
+      const job=!original&&kind==='bot'&&this.state.jobs.find(j=>j.botId===input.id&&!j.roomId&&(input.lineId===j.id+':input'||input.lineId===j.id+':result'));
+      if(!original&&!job)throw new Error('这条消息暂不支持表情回应。');
+      let holder=original,key='reaction';
+      if(job){if(!job.reactions)edit.set(job,'reactions',{});holder=job.reactions;key=input.lineId;}
+      reaction=explicit?wanted:holder[key]===wanted?null:wanted;
+      edit.set(holder,key,reaction);
+    });}catch(error){edit.rollback();throw error;}
+    return input.compact?{kind,id:input.id,lineId:input.lineId,reaction}:this.snapshot();
   }
   preferences(input){
     const pending=(this.preferenceWrites||Promise.resolve()).catch(()=>{}).then(()=>this.savePreferences(input));

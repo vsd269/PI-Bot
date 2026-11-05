@@ -13,9 +13,10 @@ export function createTranscriptNavigation({scroller,transcript,composer}){
   function remember(){if(!visible()||!pinned||!selection||!latestId||cursors.get(selection)===latestId)return;cursors.delete(selection);cursors.set(selection,latestId);while(cursors.size>200)cursors.delete(cursors.keys().next().value);try{localStorage.setItem('pi-bot.read-cursors',JSON.stringify([...cursors]));}catch{}}
   function clearDivider(){clearTimeout(linger);clearTimeout(fade);linger=fade=0;boundary=null;divider.remove();divider.classList.remove('pi-new-messages-fading');}
   function placeDivider(){const node=[...transcript.querySelectorAll('[data-line-id]')].find(n=>n.dataset.lineId===currentIds.get(boundary));if(node)node.before(divider);else divider.remove();}
+  const topInset=()=>Math.max(12,parseFloat(getComputedStyle(scroller).scrollPaddingTop)||0);
   function readDivider(){
     if(!divider.isConnected||!visible())return;const a=divider.getBoundingClientRect(),b=scroller.getBoundingClientRect();
-    if(a.top>=b.top&&a.bottom<=b.bottom){if(!linger&&!fade)linger=setTimeout(()=>{linger=0;if(!visible())return;divider.classList.add('pi-new-messages-fading');fade=setTimeout(clearDivider,480);},1200);}
+    if(a.top>=b.top+topInset()&&a.bottom<=b.bottom){if(!linger&&!fade)linger=setTimeout(()=>{linger=0;if(!visible())return;divider.classList.add('pi-new-messages-fading');fade=setTimeout(clearDivider,480);},1200);}
     else if(linger){clearTimeout(linger);linger=0;}
   }
   const atBottom=()=>scroller.scrollHeight-scroller.scrollTop-scroller.clientHeight<=24;
@@ -51,7 +52,7 @@ export function createTranscriptNavigation({scroller,transcript,composer}){
       else{if(!pinned||!visible())for(const id of keys)if(!known.has(id)){unread.add(id);if(!boundary)boundary=id;}for(const id of keys)known.add(id);}
       return {pinned,top:scroller.scrollTop,focusBoundary};
     },
-    afterRender(view){placeDivider();scroller.scrollTop=view.pinned?scroller.scrollHeight:view.top;if(view.focusBoundary&&divider.isConnected){scroller.scrollTop+=divider.getBoundingClientRect().top-scroller.getBoundingClientRect().top-12;pinned=atBottom();}remember();readDivider();paint();},
+    afterRender(view){placeDivider();scroller.scrollTop=view.pinned?scroller.scrollHeight:view.top;if(view.focusBoundary&&divider.isConnected){scroller.scrollTop+=divider.getBoundingClientRect().top-scroller.getBoundingClientRect().top-topInset();pinned=atBottom();}remember();readDivider();paint();},
     latest,
     reveal(node){jumping=false;pinned=false;node.scrollIntoView({block:'center',behavior:'instant'});lastTop=scroller.scrollTop;paint();},
     close(){closed=true;clearDivider();cancelAnimationFrame(frame);observer.disconnect();window.removeEventListener('focus',onFocus);document.removeEventListener('visibilitychange',onFocus);scroller.removeEventListener('scroll',onScroll);for(const event of ['wheel','pointerdown','keydown'])scroller.removeEventListener(event,interrupt);chip.remove();}

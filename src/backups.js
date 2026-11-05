@@ -32,6 +32,7 @@ function validateState(state){
   }
   for(const key of ['schedules','questions','completions','archives'])if(state[key]!==undefined&&(!Array.isArray(state[key])||state[key].some(v=>!v||typeof v!=='object'||Array.isArray(v))))throw Error('备份中的任务或记录无效。');
   if(state.views!==undefined)validateRecords(state.views,state.bots);
+  require('./sidebar-sections').validateSidebarSections(state);
   require('./file-waits').validateWaits(state);
   validateRequests(state);validateClaims(state);validateBatches(state);validateLog(state.executionLog);validatePrivateState(state);require('./learning').validateLearning(state);
   if(state.attentionReceipts!==undefined&&(!Array.isArray(state.attentionReceipts)||state.attentionReceipts.length>2000||state.attentionReceipts.some(r=>!r||typeof r.id!=='string'||r.id.length>500||typeof r.version!=='string'||!/^[a-f0-9]{64}$/.test(r.version))))throw Error('待处理查看记录无效。');
@@ -112,7 +113,7 @@ class Backups{
     const payload={team:this.team.vault?this.team.vault.cleanState(state):structuredClone(state),memory:this.team.vault?this.team.vault.clean(memory):memory,avatarLibrary:this.team.avatars?.export()||{version:1,revision:0,items:[]}},archive={format:'pi-bot-backup',schema:1,pluginId:ID,pluginVersion:require('../manifest.json').version,createdAt:new Date().toISOString(),reason,sha256:hash(payload),payload};
     const text=JSON.stringify(archive);if(Buffer.byteLength(text)>MAX_BYTES)throw Error('备份超过 32 MB，请另行复制完整数据目录。');return {archive,text};
   }
-  configKey(state){return hash({bots:state.bots.map(({chat,sessions,sessionArchive,sessionWorkspaces,memory,...config})=>config),rooms:state.rooms.map(({log,sessions,planning,...config})=>config),integrations:state.integrations,prefs:state.prefs,botConnectors:state.botConnectors,capabilities:state.capabilities,schedules:(state.schedules||[]).map(({runs,nextAt,status,error,...config})=>config),messageBotRequests:(state.messageBotRequests||[]).map(({key,signature,status,jobId})=>[key,signature,status,jobId]),avatarLibraryRevision:this.team.avatars?.revision||0});}
+  configKey(state){return hash({sidebarSections:state.sidebarSections,bots:state.bots.map(({chat,sessions,sessionArchive,sessionWorkspaces,memory,...config})=>config),rooms:state.rooms.map(({log,sessions,planning,...config})=>config),integrations:state.integrations,prefs:state.prefs,botConnectors:state.botConnectors,capabilities:state.capabilities,schedules:(state.schedules||[]).map(({runs,nextAt,status,error,...config})=>config),messageBotRequests:(state.messageBotRequests||[]).map(({key,signature,status,jobId})=>[key,signature,status,jobId]),avatarLibraryRevision:this.team.avatars?.revision||0});}
   async checkpoint(state,reason='automatic',force=false){
     const key=this.configKey(state);if(!force&&key===this.lastConfig&&Date.now()-this.lastAt<300000)return;
     const {text}=await this.archive(state,reason);this.lastFileMs=Math.max(Date.now(),(this.lastFileMs||0)+1);const name=new Date(this.lastFileMs).toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,8)+'.json';

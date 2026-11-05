@@ -19,6 +19,25 @@ const command=(botIds=['worker'])=>({id:'cmd',command:process.execPath,args:[],b
 const config=()=>({commands:[command()],api:{enabled:true,ownerId:'worker',botIds:['worker','admin'],port:0},speech:{worker:{provider:'qwen',model:'fun-asr-realtime'}},speechGlobal:{provider:'qwen',model:'fun-asr-realtime'}});
 const disk=async t=>JSON.parse(await fs.readFile(t.file,'utf8'));
 const restart=async t=>{const b=new Backups(t);await b.prepare();const state=await t.longMessages.restore(await disk(t));validateState(state);return {b,state};};
+
+test('explicit reaction updates persist for bot, group and job messages; repeated requests are idempotent',async ctx=>{
+ const {team:t}=await fixture(ctx);t.bot('worker').chat=[{id:'same',text:'hello'}];t.state.rooms=[{id:'room',name:'Group',members:['worker'],log:[{id:'same',text:'group'}]}];t.state.jobs=[{id:'job',botId:'worker',status:'completed',task:'task',result:'done'}];
+ for(const [kind,id,lineId] of [['bot','worker','same'],['room','room','same'],['bot','worker','job:input'],['bot','worker','job:result']]){
+  const input={kind,id,lineId,reaction:'👍',compact:true};assert.deepEqual(await t.react(input),{kind,id,lineId,reaction:'👍'});await t.react(input);
+ }
+ let saved=await disk(t);assert.equal(saved.bots[1].chat[0].reaction,'👍');assert.equal(saved.rooms[0].log[0].reaction,'👍');assert.deepEqual(saved.jobs[0].reactions,{'job:input':'👍','job:result':'👍'});
+ await t.react({kind:'bot',id:'worker',lineId:'same',reaction:null,compact:true});saved=await disk(t);assert.equal(saved.bots[1].chat[0].reaction,null);assert.equal(saved.rooms[0].log[0].reaction,'👍');
+ await t.react({kind:'bot',id:'worker',lineId:'same',emoji:'❤️'});assert.equal(t.bot('worker').chat[0].reaction,'❤️');await t.react({kind:'bot',id:'worker',lineId:'same',emoji:'❤️'});assert.equal(t.bot('worker').chat[0].reaction,null);
+ await assert.rejects(t.react({kind:'bot',id:'admin',lineId:'job:result',reaction:'👍'}),/消息不存在/);await assert.rejects(t.react({kind:'bot',id:'worker',lineId:'same',reaction:'invalid'}),/无效/);
+});
+
+test('failed reaction writes roll back only their fields before a queued successful save',async ctx=>{
+ const {team:t}=await fixture(ctx);t.bot('worker').chat=[{id:'r',text:'hello',reaction:'❤️'}];await t.save();const g=gate();let writes=0;
+ t.store={write:async bytes=>{if(++writes===1){await g.promise;throw Error('DISK_FAILURE');}await fs.writeFile(t.file,bytes);}};
+ const first=t.react({kind:'bot',id:'worker',lineId:'r',reaction:null,compact:true});const failed=assert.rejects(first,/DISK_FAILURE/);
+ await new Promise(r=>setImmediate(r));t.bot('admin').chat=[{id:'new',text:'concurrent'}];const next=t.save();g.resolve();await failed;await next;
+ assert.equal(t.bot('worker').chat[0].reaction,'❤️');assert.equal((await disk(t)).bots[1].chat[0].reaction,'❤️');assert.equal((await disk(t)).bots[0].chat[0].text,'concurrent');
+});
 test('delete cleans commands, API and legacy speech; restart never resurrects Bot',async ctx=>{
  const {team:t,effects}=await fixture(ctx);t.state.integrations=config();await t.save();const b=new Backups(t);await b.checkpoint(t.state,'before-delete',true);
  await t.deleteBot('worker',true);await Promise.allSettled([...t.background]);validateState(t.state);
