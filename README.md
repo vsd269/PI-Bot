@@ -19,6 +19,30 @@ PI Bot 是基于 [DS Bot](https://github.com/Fei2411/DeepSeek-Bot) 学习、迁�
 </p>
 <p align="center"><sub>真实插件界面 · 模拟聊天示例：让不同专长的 Bot 在同一个群聊中一起工作。</sub></p>
 
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-library.png"><img src="docs/images/pi-bot-library.png" width="720" alt="文案助手在聊天中整理发布计划，右侧资料库集中管理记忆、技能和工作文件夹。" /></a><br />
+      <strong>助手资料库</strong><br /><sub>边聊边工作，记忆、技能和文件夹各归其位。</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-memory.png"><img src="docs/images/pi-bot-memory.png" width="720" alt="长期记忆面板显示摘要、分类条目、来源和支持原话。" /></a><br />
+      <strong>可查看的长期记忆</strong><br /><sub>记住偏好与项目约定，也能核对来源、修改和删除。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-apps.png"><img src="docs/images/pi-bot-apps.png" width="720" alt="应用连接页面按分类展示第三方应用，支持搜索和接入自己的 MCP 服务器。" /></a><br />
+      <strong>应用与工具连接</strong><br /><sub>浏览应用目录，用自己的账号授权，再选择可使用的 Bot。</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-avatars.png"><img src="docs/images/pi-bot-avatars.png" width="720" alt="从右侧头像编辑器选择不同机器人形象，也可上传图片或使用共享头像库。" /></a><br />
+      <strong>每个助手都有自己的样子</strong><br /><sub>选择角色头像，或上传自己的图片，让团队更容易辨认。</sub>
+    </td>
+  </tr>
+</table>
+<p align="center"><sub>点击图片查看大图。以上均为真实插件界面，聊天与记忆内容为演示数据；应用目录展示不代表已经完成授权。</sub></p>
+
 最新正式版本为 **0.3.107**，汇总 0.3.102～0.3.107 的优化。完整内容见 [合并更新说明](docs/RELEASE-0.3.107.md)，安装包见 [GitHub Releases](https://github.com/vsd269/PI-Bot/releases/latest)。
 
 ## 0.3.107 更新：侧栏分类、记忆检索与聊天体验

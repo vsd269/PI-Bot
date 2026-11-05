@@ -9,6 +9,30 @@ PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/
 </p>
 <p align="center"><sub>Actual plugin interface with simulated conversation content. Bots with different specialties work together in one group chat.</sub></p>
 
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-library.png"><img src="docs/images/pi-bot-library.png" width="720" alt="A writing assistant prepares a content plan while its Library panel organizes memory, skills and working folders." /></a><br />
+      <strong>A library for each assistant</strong><br /><sub>Keep memory, skills and working folders close to the conversation.</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-memory.png"><img src="docs/images/pi-bot-memory.png" width="720" alt="The long-term memory panel shows a summary, categorized entries, sources and supporting quotes." /></a><br />
+      <strong>Memory you can inspect</strong><br /><sub>Review preferences and project agreements, check sources, edit or remove entries.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-apps.png"><img src="docs/images/pi-bot-apps.png" width="720" alt="The Apps page groups third-party services by category and supports search and custom MCP servers." /></a><br />
+      <strong>Connect apps and tools</strong><br /><sub>Browse the catalog, authorize your own accounts and choose which Bots can use them.</sub>
+    </td>
+    <td width="50%" align="center">
+      <a href="docs/images/pi-bot-avatars.png"><img src="docs/images/pi-bot-avatars.png" width="720" alt="The avatar editor offers distinct robot characters, image uploads and a shared avatar library." /></a><br />
+      <strong>A distinct look for every Bot</strong><br /><sub>Pick a character or upload your own image to recognize your team at a glance.</sub>
+    </td>
+  </tr>
+</table>
+<p align="center"><sub>Click any image to view it full size. All screenshots use the actual plugin interface with simulated chat and memory data. Catalog listings do not indicate completed authorization.</sub></p>
+
 The latest stable release is **0.3.107**, combining changes from 0.3.102 through 0.3.107. See the [combined release notes](docs/RELEASE-0.3.107.md) and [download the plugin](https://github.com/vsd269/PI-Bot/releases/latest).
 
 ## New in 0.3.107
