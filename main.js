@@ -11,7 +11,7 @@ const {createActivation}=require('./src/activation');
 const {migrateIdentity}=require('./src/identity-migration');
 let activation;
 let team,microphone,openRequested=false;
-const requests=new Map();
+const requests=new (require('./src/renderer-requests').RendererRequests)();
 const rendererUploads=new (require('./src/renderer-uploads').RendererUploads)();
 const syncState=require('./src/state-sync').createStateSync();
 async function onLoad(){
@@ -135,21 +135,11 @@ function onRendererCall(method,args={}){
     return beginRequest(args);
   }
   if(method==='request.read'){
-    const item=requests.get(args.id);if(!item)throw new Error('Request expired.');
-    if(item.pending)return {pending:true};
-    if(item.error){requests.delete(args.id);return {error:item.error};}
-    // Serialized JSON contains no raw control characters. 14000 UTF-16 units
-    // stay below PI's 64 KiB relay ceiling for CJK text and escaped quotes.
-    const offset=Math.max(0,Number(args.offset)||0),chunk=item.json.slice(offset,offset+14000),done=offset+chunk.length>=item.json.length;
-    if(done)requests.delete(args.id);return {chunk,done};
+    return args.release?requests.release(args.id):requests.read(args);
   }
   throw new Error('Unknown renderer method.');
 }
 function beginRequest(args){
-  for(const [id,item] of requests)if(Date.now()-item.at>120000)requests.delete(id);
-  if(requests.size>=100)throw new Error('Too many pending requests.');
-  const id=randomUUID(),item={at:Date.now(),pending:true};requests.set(id,item);
-  Promise.resolve().then(()=>onPanelInvoke(args.channel,args.payload)).then(value=>{item.json=JSON.stringify(value??null);item.pending=false;},error=>{item.error=error.message;item.pending=false;});
-  return {id};
+  return requests.start(args,()=>onPanelInvoke(args.channel,args.payload));
 }
 module.exports={onLoad,onUnload,onPanelInvoke,onRendererCall};

@@ -207,7 +207,7 @@ class Team {
       usageSummaries[(isRoom?'room:':'bot:')+item.id]={...summarizeUsage(records),tools:jobs.reduce((n,j)=>n+(j.toolCalls||0),0),done:jobs.filter(j=>!this.active(j)).length,legacyAdminUnknown:isRoom?item.log?.some(l=>l.coordinator&&!l.usageId):item.chat?.some(l=>l.coordinator&&!l.usageId)};
     }
     const {messageBotRequests,workClaims,workBatches,attentionReceipts,executionLog,learning,...visibleState}=this.state;
-    return structuredClone({...this.vault.cleanState(visibleState),permissionRequests:[...(this.permissionRequests?.values()||[])],learningNews:this.learning?.news()||{pending:[],running:[]},usageSummaries,botActivity:Object.fromEntries(this.state.bots.map(b=>[b.id,this.handoffs.activity(b)])),executing:this.state.jobs.filter(j=>['running','waiting'].includes(j.status)).map(j=>j.botId),concurrency:'per-group',executionModes:['serial','parallel'],adminExecutes:this.state.bots.some(b=>b.role==='Administrator'&&b.agentMode==='agent'),memoryNews:this.memory?.rt.memoryNews?.()||{},schedules:this.schedules?.view(),capabilities:{nativeBrowser:true,isolatedBotBrowser:true,secretEnvironment:true,speech:true,imageOcr:true,historyIndex:true,externalBotApi:true,midTurnSteering:this.integrations?.operations.has('agent/steer')===true,botSecretVault:true,botMcpBridge:true,taskRecovery:true,nativeCompaction:true}});
+    return structuredClone({appConnections:this.integrations?.apps?.connections?.view(),...this.vault.cleanState({...visibleState,rooms:this.state.rooms.map(room=>({...room,pendingMessages:this.roomPending.get(room.id)||0}))}),permissionRequests:[...(this.permissionRequests?.values()||[])],learningNews:this.learning?.news()||{pending:[],running:[]},usageSummaries,botActivity:Object.fromEntries(this.state.bots.map(b=>[b.id,this.handoffs.activity(b)])),executing:this.state.jobs.filter(j=>['running','waiting'].includes(j.status)).map(j=>j.botId),concurrency:'per-group',executionModes:['serial','parallel'],adminExecutes:this.state.bots.some(b=>b.role==='Administrator'&&b.agentMode==='agent'),memoryNews:this.memory?.rt.memoryNews?.()||{},schedules:this.schedules?.view(),capabilities:{nativeBrowser:true,isolatedBotBrowser:true,secretEnvironment:true,speech:true,imageOcr:true,historyIndex:true,externalBotApi:true,midTurnSteering:this.integrations?.operations.has('agent/steer')===true,botSecretVault:true,botMcpBridge:true,taskRecovery:true,nativeCompaction:true}});
   }
   bot(id){const bot=this.state.bots.find(b=>b.id===id);if(!bot)throw new Error('Bot not found.');return bot;}
   botName(id){const bot=this.state.bots.find(b=>b.id===id);return bot?bot.name:'已移除成员';}
@@ -331,7 +331,7 @@ class Team {
       try{await this.save();}catch(e){this.state.bots=previous;affected.forEach((b,i)=>b.role=roles[i]);throw e;}return this.snapshot();
     }));this.settingWrites=execute.catch(()=>{});return execute;
   }
-  context(bot,sessionId){return '\nOffice documents: before handling .docx/.pptx/.xlsx, call get_office_tools for the local CLI and runtime. Execute commands with native PI tools and approvals.\nWhen the user needs to choose between concrete alternatives or clarify a preference, use ask_user to show an option card with short labels and allowCustom:true. Do not force a question for an already clear task.\n'+privacy.context(bot)+'Bot instructions: '+(bot.instructions||'')+'\nMCP: use list_bot_mcp_tools and call_bot_mcp_tool only for connectors explicitly granted to you. request_secret requests your own named credential through the password UI; never ask for keys in chat or print values.\n'+(this.capabilities?.section(bot)||'')+'\n'+(this.memory?.section(bot,sessionId)||bot.memory||'');}
+  context(bot,sessionId){return '\nOffice documents: before handling .docx/.pptx/.xlsx, call get_office_tools for the local CLI and runtime. Execute commands with native PI tools and approvals.\nWhen the user needs to choose between concrete alternatives or clarify a preference, use ask_user to show an option card with short labels and allowCustom:true. Do not force a question for an already clear task.\n'+(this.integrations?.apps?.context(bot.id)||'')+privacy.context(bot)+'Bot instructions: '+(bot.instructions||'')+'\nMCP: use list_bot_mcp_tools and call_bot_mcp_tool only for connectors explicitly granted to you. request_secret requests your own named credential through the password UI; never ask for keys in chat or print values.\n'+(this.capabilities?.section(bot)||'')+'\n'+(this.memory?.section(bot,sessionId)||bot.memory||'');}
   upsertRoom(input,createdId){return this.rosterChange(()=>this.saveRoom(input,createdId));}
   updateRoomMembers(id,patch,add=[],remove=[]){return this.rosterChange(()=>{const room=this.room(id),members=[...new Set([...room.members,...add])].filter(id=>!remove.includes(id)&&this.state.bots.some(b=>b.id===id));return this.saveRoom({...room,...patch,members});});}
   async saveRoom(input,createdId){
@@ -420,7 +420,7 @@ class Team {
     if(this.memory?.archiveGroup)this.track(this.memory.archiveGroup(memoryRoom)).catch(error=>{(this.state.diagnostics??=[]).push({at:new Date().toISOString(),message:'群聊记忆归档失败：'+error.message});});
     return compact?{deleted:id}:this.snapshot();
   }
-  log(room,who,text,extra={}){room.log.push({id:randomUUID(),at:new Date().toISOString(),who,text,botId:this.state.bots.find(b=>b.name===who)?.id,...extra});}
+  log(room,who,text,extra={}){if(who==='System'){const admin=this.state.bots.find(b=>b.id===room.adminId);if(admin){who=admin.name;extra={kind:'notice',coordinator:true,botId:admin.id,...extra};}}room.log.push({id:randomUUID(),at:new Date().toISOString(),who,text,botId:this.state.bots.find(b=>b.name===who)?.id,...extra});}
   track(promise){this.background.add(promise);promise.then(()=>this.background.delete(promise),()=>this.background.delete(promise));return promise;}
   complete(bot,system,messages,scope={}){return this.track(this.runCompletion(bot,system,messages,scope));}
   async runCompletion(bot,system,messages,scope={}){
@@ -491,11 +491,11 @@ class Team {
     let planningId;
     try {
       const admin=this.state.bots.find(b=>b.id===room.adminId);const workers=room.members.filter(id=>id!==room.adminId&&id!==options.fromBotId).map(id=>this.bot(id)).filter(b=>b.role!=='Administrator');
-      const spans=this.mentions.mentionSpans(content,workers);const explicit=[...new Set(spans.filter(s=>s.bot).map(s=>s.bot.id))].map(id=>this.bot(id));const all=spans.some(s=>s.all);let plan;
+      const spans=this.mentions.mentionSpans(content,room.members.map(id=>this.bot(id))),adminMention=spans.some(s=>s.bot?.id===admin?.id);const explicit=[...new Set(spans.filter(s=>s.bot&&workers.includes(s.bot)).map(s=>s.bot.id))].map(id=>this.bot(id));const all=spans.some(s=>s.all);let plan;
       planningId=randomUUID();
       this.log(room,admin?.name||'System','正在分析并分派任务…',{coordinator:true,progress:true,planning:true,planningId});
       await this.save();
-      if(!admin||all||explicit.length||room.replyMode==='everyone')plan={reply:workers.length?'任务已派发给执行成员。':'请先加入执行成员。',assignments:(all||(!admin||room.replyMode==='everyone')&&!explicit.length?workers:explicit).map(b=>({botId:b.id,task:content}))};
+      if(!admin||!adminMention&&(all||explicit.length||room.replyMode==='everyone'))plan={reply:workers.length?'任务已派发给执行成员。':'请先加入执行成员。',assignments:(all||(!admin||room.replyMode==='everyone')&&!explicit.length?workers:explicit).map(b=>({botId:b.id,task:content}))};
       else {
         const prompt=ADMIN_RULES+'\n\n'+planningContext(this,admin,admin.sessions?.[room.id]||'group-admin:'+room.id+':'+admin.id)+'\n\nGroup planning input (JSON data):\n'+JSON.stringify({request:content,notice:String(room.notice||'').slice(0,2000),workers:planningWorkers(this,workers),group:{id:room.id,name:room.name,members:room.members,adminId:room.adminId},recent:planningRecent(room)});
         const response=await this.nativePlan(room,admin,prompt,planningId,startedAt,generation,options.attachments);
@@ -652,7 +652,7 @@ class Team {
     const line=room.log.find(l=>l.jobId===job.id);
     if(line)Object.assign(line,{who:this.botName(job.botId),text:job.result||job.error||job.status,...extra});
     else this.log(room,this.botName(job.botId),job.result||job.error||job.status,extra);
-    room.unread=true;this.bot(job.botId).unread=true;
+    room.unread=true;
   }
   async delegateMentions(room,job){
     if(job.delegated||job.isHandoffReply||job.cancelled||job.groupStopped||this.stopped||!groupWork.current(this,room,job.groupEpoch??0))return;
@@ -811,11 +811,22 @@ class Team {
     const job=await admit(this,{bot,task:content,options,change:edit=>{const viewEdit=supersedeViews(this,botId,options);edit.undo.push(()=>viewEdit.rollback());}});return {jobId:job.id};
   }
   async cancel(jobId){
-    const job=this.state.jobs.find(j=>j.id===jobId);if(!job||!this.active(job))throw new Error('No active task to interrupt.');
-    job.cancelled=true;await this.save();
-    if(job.turnId&&['running','waiting'].includes(job.status))await this.invoke('agent/abort',[{sessionId:job.sessionId,turnId:job.turnId}]);
+    const job=this.state.jobs.find(j=>j.id===jobId);if(!job)throw new Error('任务不存在，请刷新会话。');
+    if(!this.active(job)){
+      // A stale local terminal status must not strand its exact native turn.
+      // Never fall back to aborting whatever newer turn shares this session.
+      if(job.sessionId&&job.turnId){const runtime=await this.invoke('agent/getStatus',[job.sessionId]);if(runtime?.status?.isRunning&&runtime.status.currentTurnId===job.turnId){await this.invoke('agent/abort',[{sessionId:job.sessionId,turnId:job.turnId}]);return {requested:true,jobId:job.id};}}
+      return {requested:false,alreadyFinished:true};
+    }
+    job.cancelled=true;job.stopRequestedAt=new Date().toISOString();
+    // Freeze admission immediately and interrupt the exact native turn before
+    // awaiting disk/backups. A terminal UI snapshot is an idempotent stop.
+    const interrupt=job.turnId&&['launching','running','waiting'].includes(job.status)?this.invoke('agent/abort',[{sessionId:job.sessionId,turnId:job.turnId}]):Promise.resolve();
+    const results=await Promise.allSettled([interrupt,this.save()]);
+    for(const result of results)if(result.status==='rejected')throw result.reason;
+    if(job.turnId&&['launching','running','waiting'].includes(job.status)){this.wakePoll();}
     else if(['queued','waiting_teammates'].includes(job.status)){job.status='aborted';job.error='用户已停止任务。';job.endedAt=new Date().toISOString();await this.handoffs.settled(job);await this.deliverResult(this.handoffs.root(job));if(job.roomId)this.log(this.room(job.roomId),this.botName(job.botId),'排队任务已取消。',{jobId:job.id,status:'aborted'});await this.save();if(job.roomId)this.summarize(this.room(job.roomId),job.roundId).catch(()=>{});}
-    return this.snapshot();
+    return {requested:true,jobId:job.id};
   }
   async applyAdminActions(admin,actions=[],room,options={}){
     if(!Array.isArray(actions)||actions.length>10)throw new Error('Invalid administrator actions.');
@@ -859,7 +870,7 @@ class Team {
       if(target.role==='Administrator'&&target.agentMode!=='agent'||room?.adminId===target.id){
         const rows=room?room.log:(target.chat??=[]),id=job.id+':reply';
         if(!rows.some(l=>l.id===id||room&&l.jobId===job.id&&!l.progress))rows.push({id,who:this.botName(job.botId),botId:job.botId,text,at:new Date().toISOString(),deliverySourceId:job.id});
-        target.unread=true;if(room)room.unread=true;
+        if(room)room.unread=true;else target.unread=true;
       }else if(!existing){
         await admit(this,{room,bot:target,task:text,key:'delivery:'+job.id,options:{scheduleId:job.scheduleId,scheduleRunId:job.scheduleRunId,offRound:Boolean(room),isHandoffReply:true,fromBotId:job.botId,fromName:this.botName(job.botId),hop:job.hop||1,deliverySourceId:job.id,...(room?{groupEpoch:job.replyGroupEpoch??0}:{})}});
       }
@@ -870,7 +881,7 @@ class Team {
     try{return await run;}catch(error){job.deliveryError=String(error.message).slice(0,1000);throw error;}finally{this.deliveries.delete(job.id);}
   }
   answerQuestion(input){return answerQuestion(this,input);}
-  async pin(input){const item=input.kind==='room'?this.room(input.id):this.bot(input.id);if(Object.hasOwn(input,'pinned'))item.pinned=input.pinned===true;if(Object.hasOwn(input,'unread'))item.unread=input.unread===true;if(Object.hasOwn(input,'hidden')){if(input.kind!=='room'&&item.role==='Administrator'&&input.hidden)throw Error('主机器人始终显示在侧栏。');item.hidden=input.hidden===true;}await this.save();return this.snapshot();}
+  async pin(input){const item=input.kind==='room'?this.room(input.id):this.bot(input.id);if(Object.hasOwn(input,'pinned'))item.pinned=input.pinned===true;if(Object.hasOwn(input,'unread'))item.unread=input.unread===true;if(Object.hasOwn(input,'hidden')){if(input.kind!=='room'&&item.role==='Administrator'&&input.hidden)throw Error('主机器人始终显示在侧栏。');item.hidden=input.hidden===true;}await this.save();return input.compact?{kind:input.kind,id:item.id,unread:item.unread}:this.snapshot();}
   async react(input){
     const kind=input.kind==='room'?'room':'bot',explicit=Object.hasOwn(input,'reaction'),wanted=explicit?input.reaction:input.emoji;
     if(!(explicit&&wanted===null)&&!['👍','❤️','😂','😮','😢','🙏'].includes(wanted))throw new Error('无效的反应。');

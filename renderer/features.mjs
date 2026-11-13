@@ -4,7 +4,7 @@ import {createExtensions} from './extensions.mjs';
 import {mountSkillImport} from './skill-import.mjs';
 import {el,icon} from './dom.mjs';
 import {createApps} from './apps.mjs';
-import {renderSidebarApps} from './sidebar-apps.mjs';
+import {renderSidebarConnections} from './sidebar-apps.mjs';
 import {createAdvanced} from './advanced.mjs';
 import {createAttention} from './attention.mjs';
 import {createSettingsShell} from './settings-shell.mjs';
@@ -207,10 +207,11 @@ export function createFeatures({app,call,getState,update,selectChat,onNative,not
   }
   async function plugins(){return capabilities();}
   function about(){show('关于 PI-bot');info('PI Bot 0.3.78 · 面向 PI-Desktop 插件接口适配。对照上游 0.1.7：Fei2411 / DeepSeek-Bot，保留原许可证和来源记录。');info('PI 适配保留自定义头像、侧栏入口和“PI 原生界面”返回入口。群聊保留串行与并行；主机器人可选只规划分派或在私聊直接执行。');info('使用 PI 原生 Agent 的上下文压缩和工具审批。新增按 Bot 授权的本地 MCP、Windows 加密密钥库、加密密钥迁移及任务恢复中心。MCP 授权约束本插件桥接入口，PI 原生全局工具仍由 PI 管理。恢复依据会话记录，不是执行中途的进程快照。扩展功能包含每 Bot 独立 Edge/Chrome 浏览器、语音转写与系统朗读、Windows OCR、完整会话索引和本机 Bot API。专属命令工具支持密钥环境变量；PI 原生 shell 保持由客户端管理。');const diagnostics=getState().diagnostics||[];body.append(button('导出诊断（不含聊天正文）',()=>download('PI-bot-diagnostics.json',JSON.stringify(diagnostics,null,2),'application/json')));}
-  const apps=createApps({app,call,getState,avatar,onMcp:()=>pages.open('connectors'),onChanged:accounts=>{const marks=app.querySelector('.pi-connected-apps');if(marks)renderSidebarApps(marks,accounts);}});
+  const updateApps=connection=>{const marks=app.querySelector('.pi-connected-apps');if(marks&&connection)renderSidebarConnections(marks,app.querySelector('#native'),connection);};
+  const apps=createApps({app,call,getState,avatar,onMcp:()=>pages.open('connectors'),onChanged:(accounts,connection)=>updateApps(connection||{configured:true,phase:'ready',accounts})});
   const attention=createAttention({body,show,call,isCurrent:token=>token===generation&&dialog.open,selectChat,close:()=>dialog.close(),notice,recovery:advanced.recovery});
   const pages=createSettingsPages({body,show,call,getState,update,savePreferences,notice,onNative:goNative,download,editEntity,avatar,cluster,isCurrent:token=>token===generation&&dialog.open,legacy:{apps:()=>{dialog.close();return apps.open();},preferences,capabilities,schedules,secrets:advanced.secrets,mcp:advanced.mcp,recovery:advanced.recovery,backups,extensions:extensions.extensions,history}});
-  return {...advanced,...extensions,apps:()=>apps.open(),plugins,preferences:()=>pages.open('general'),connectors:()=>pages.open('connectors'),capabilities,usage:options=>pages.open('usage',options),schedules,secrets:botId=>pages.open('secrets',{botId}),history,archivedHistory,memory,backups,about:()=>pages.open('about'),settings:page=>pages.open(page||'general'),isSettingsOpen:shell.isOpen,presentEntity(kind,name,form,restore){show(name,{page:kind==='bot'?'bots':'groups',move:'in',back:()=>pages.open(kind==='bot'?'bots':'groups')});const wrap=el('div','','bt-settings-form');wrap.append(form);body.append(wrap);disposeBody=restore;},close(){apps.close();extensions.dispose();shell.dispose();}};
+  return {...advanced,...extensions,syncApps(connection){updateApps(connection);apps.receive(connection);},apps:()=>apps.open(),plugins,preferences:()=>pages.open('general'),connectors:()=>pages.open('connectors'),capabilities,usage:options=>pages.open('usage',options),schedules,secrets:botId=>pages.open('secrets',{botId}),history,archivedHistory,memory,backups,about:()=>pages.open('about'),settings:page=>pages.open(page||'general'),isSettingsOpen:shell.isOpen,presentEntity(kind,name,form,restore){show(name,{page:kind==='bot'?'bots':'groups',move:'in',back:()=>pages.open(kind==='bot'?'bots':'groups')});const wrap=el('div','','bt-settings-form');wrap.append(form);body.append(wrap);disposeBody=restore;},close(){apps.close();extensions.dispose();shell.dispose();}};
 }
 function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function localISO(date){const pad=n=>String(n).padStart(2,'0');return date.getFullYear()+'-'+pad(date.getMonth()+1)+'-'+pad(date.getDate())+'T'+pad(date.getHours())+':'+pad(date.getMinutes());}

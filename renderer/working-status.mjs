@@ -24,7 +24,8 @@ export function createWorkingStatus({transcript,avatar}){
     const jobs=workingJobs(state,selection);
     const rank={waiting:0,running:1,launching:2,queued:3,waiting_teammates:4},seen=new Set();
     const rows=jobs.sort((a,b)=>rank[a.status]-rank[b.status]).filter(j=>{if(seen.has(j.botId))return false;seen.add(j.botId);return true;}).map(job=>({bot:state.bots.find(b=>b.id===job.botId),job})).filter(r=>r.bot);
-    if(room?.planning&&!rows.some(r=>r.bot.id===room.adminId)){const admin=state.bots.find(b=>b.id===room.adminId);if(admin)rows.unshift({bot:admin,job:{status:'running',activityPhase:'planning'}});}
+    if((room?.planning||room?.pendingMessages)&&!rows.some(r=>r.bot.id===room.adminId)){const admin=state.bots.find(b=>b.id===room.adminId);if(admin)rows.unshift({bot:admin,job:{status:room.planning?'running':'queued',activityPhase:room.planning?'planning':''}});}
+    if(!room&&!rows.length){const bot=state.bots.find(b=>b.id===selection?.id);if(bot?.planning)rows.push({bot,job:{status:'running',activityPhase:'planning'}});}
     if(!room&&!rows.length&&pending){const bot=state.bots.find(b=>b.id===selection?.id);if(bot)rows.push({bot,job:{status:'queued'}});}
     const next=JSON.stringify(rows.map(r=>[r.bot.id,r.bot.avatar,r.bot.color,r.bot.name,workingLabel({...r.job,progress:liveProgress(r.job)||r.job.progress})]));
     if(next!==key){key=next;node.replaceChildren();for(const row of rows){const line=el('div','','pi-working-line'),label=workingLabel({...row.job,progress:liveProgress(row.job)||row.job.progress});line.append(avatar(row.bot,28,false,false),el('span',(room?row.bot.name+' · ':'')+label,'pi-working-label'));line.title=label+(row.job.currentTool?' · '+row.job.currentTool:'');node.append(line);}}

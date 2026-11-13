@@ -1,17 +1,24 @@
 {
   "name": "pi-bot-desktop",
-  "version": "0.3.107",
+  "version": "0.3.110",
   "private": true,
   "description": "DS Bot adaptation for PI Desktop: persistent bots, group collaboration, memory and skills.",
   "license": "Apache-2.0",
   "author": "vsd269",
-  "repository": { "type": "git", "url": "https://github.com/vsd269/PI-Bot.git" },
-  "bugs": { "url": "https://github.com/vsd269/PI-Bot/issues" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vsd269/PI-Bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vsd269/PI-Bot/issues"
+  },
   "homepage": "https://github.com/vsd269/PI-Bot",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "check": "node scripts/check.cjs",
-    "test": "node --test tests/sidebar-sections.cjs tests/chat-feedback.cjs tests/regression.cjs tests/voice-regression.cjs tests/capability-regression.cjs tests/preferences-regression.cjs tests/project-metadata.cjs tests/updates.cjs tests/vault-transfer.cjs tests/identity-migration.cjs tests/activation.cjs tests/upstream-020.cjs tests/attachments.cjs tests/attachment-limits.cjs tests/upstream-021.cjs tests/execution-engine.cjs tests/upstream-024.cjs tests/privacy.cjs tests/office.cjs tests/work-reliability.cjs tests/work-upgrade.cjs tests/apps.cjs",
+    "test": "node --test tests/sidebar-sections.cjs tests/chat-feedback.cjs tests/regression.cjs tests/voice-regression.cjs tests/capability-regression.cjs tests/preferences-regression.cjs tests/project-metadata.cjs tests/updates.cjs tests/vault-transfer.cjs tests/identity-migration.cjs tests/activation.cjs tests/upstream-020.cjs tests/attachments.cjs tests/attachment-limits.cjs tests/upstream-021.cjs tests/execution-engine.cjs tests/upstream-024.cjs tests/privacy.cjs tests/office.cjs tests/work-reliability.cjs tests/work-upgrade.cjs tests/apps.cjs tests/native-sync.cjs tests/apps-startup.cjs",
     "test:apps-ui": "node tests/apps-ui.cjs",
     "test:chat-feedback-ui": "node tests/chat-feedback-ui.cjs",
     "test:frame-ui": "node tests/frame-regression-ui.cjs",
@@ -27,6 +34,9 @@
     "test:sidebar-sections-ui": "node tests/sidebar-sections-ui.cjs",
     "package": "node scripts/package.cjs",
     "preflight:market": "node scripts/market-preflight.cjs",
-    "verify:package": "node scripts/verify-package.cjs"
+    "verify:package": "node scripts/verify-package.cjs",
+    "test:native-sync-ui": "node tests/native-sync-ui.cjs",
+    "test:apps-startup-ui": "node tests/apps-startup-ui.cjs",
+    "test:apps-loading-ui": "node tests/apps-loading-ui.cjs"
   }
 }

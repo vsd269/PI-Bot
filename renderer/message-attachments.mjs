@@ -28,7 +28,7 @@ export function createMessageAttachments({host,call}){
     for(const [index,file] of (line.attachments||[]).entries()){
       const name=file.name||'图片',row=el('div','','message-attachment');
       if(/\.(png|jpe?g|webp|gif)$/i.test(file.path||file.name||'')){
-        const button=el('button','','pi-message-image'),image=el('img','','attachment-preview'),hint=el('span','正在载入图片…','pi-image-hint'),zoom=el('span','↗','pi-image-expand');
+        const button=el('button','','pi-message-image'),image=el('img','','attachment-preview'),hint=el('span','正在载入图片…','pi-image-hint'),zoom=el('span','','pi-image-expand');zoom.append(icon('ExpandIcon'));
         button.type='button';button.setAttribute('aria-label','查看图片：'+name);button.title='点击放大 '+name;image.alt=name;zoom.setAttribute('aria-hidden','true');button.append(image,hint,zoom);row.append(button);gallery.append(row);
         const context={...(line.attachmentJobId?{jobId:line.attachmentJobId}:selection.kind==='room'?{roomId:selection.id}:{botId:selection.id}),lineId:line.id,index},key=JSON.stringify([context,file.path,file.size]);let source='',loading=false;
         const paint=src=>{source=src;image.src=src;image.onload=()=>{hint.hidden=true;button.dataset.ready='';button.removeAttribute('aria-busy');};image.onerror=()=>{source='';image.removeAttribute('src');delete button.dataset.ready;hint.hidden=false;hint.textContent='图片无法显示，点击重试';button.removeAttribute('aria-busy');cache.delete(key);};};

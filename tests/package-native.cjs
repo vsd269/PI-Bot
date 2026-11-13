@@ -14,8 +14,13 @@ const {spawn}=require('node:child_process'),fs=require('node:fs/promises'),path=
   function rpc(method,params){return new Promise((resolve,reject)=>{const id=++serial,timer=setTimeout(()=>{pending.delete(id);reject(Error('timeout '+method+' '+stderr));},20000);pending.set(id,{resolve,reject,timer});child.stdin.write(JSON.stringify({jsonrpc:'2.0',id,method,params})+'\n');});}
   try{
     const handshake=await rpc('app.handshake',{protocolVersion:11});
+    const settingsPath=path.join(data,'plugins','data',manifest.id,'team.json'),settings=JSON.stringify({version:1,bots:[{id:'migration-check',name:'设置保留测试'}],rooms:[],jobs:[]});
+    await fs.mkdir(path.dirname(settingsPath),{recursive:true});await fs.writeFile(settingsPath,settings);
     const file=path.join(root,'dist',`${manifest.id}-${manifest.version}.piplug`),sha=createHash('sha256').update(await fs.readFile(file)).digest('hex');
     await rpc('plugins.installFromPackage',{path:file,enable:true,grantedPermissions:manifest.permissions,expectedShasum:sha});
+    assert.equal(await fs.readFile(settingsPath,'utf8'),settings,'install must preserve plugin data');
+    await rpc('plugins.installFromPackage',{path:file,enable:true,grantedPermissions:manifest.permissions,expectedShasum:sha});
+    assert.equal(await fs.readFile(settingsPath,'utf8'),settings,'reinstall must preserve plugin data');
     const installed=path.join(data,'plugins','installed',manifest.id),loaded=JSON.parse(await fs.readFile(path.join(installed,'manifest.json'),'utf8'));
     assert.equal(loaded.version,manifest.version);assert.equal(loaded.id,manifest.id);
     const checks=JSON.parse(await fs.readFile(path.join(installed,'checksums.json'),'utf8'));
@@ -23,7 +28,7 @@ const {spawn}=require('node:child_process'),fs=require('node:fs/promises'),path=
       const target=path.resolve(installed,name);assert(target.startsWith(path.resolve(installed)+path.sep));
       assert.equal(createHash('sha256').update(await fs.readFile(target)).digest('hex'),expected,name);
     }
-    const result={pass:true,hostVersion:handshake.version,version:manifest.version,id:manifest.id,filesVerified:Object.keys(checks.files).length,isolatedProfile:true};
+    const result={pass:true,hostVersion:handshake.version,version:manifest.version,id:manifest.id,filesVerified:Object.keys(checks.files).length,isolatedProfile:true,reinstallPreservesData:true};
     await fs.mkdir(path.join(root,'output'),{recursive:true});await fs.writeFile(path.join(root,'output','native-installer.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
   }finally{
     for(const item of pending.values())clearTimeout(item.timer);

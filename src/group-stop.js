@@ -18,10 +18,11 @@ async function stop(team,id){
   const run=(async()=>{
     const errors=[];
     try{
-      try{await team.save();}catch(error){errors.push(error);}
-      const plan=team.groupPlans?.get(id);
+      const claim=room.planningClaim;
+      const plan=team.groupPlans?.get(id)||(claim&&['accepted','submitting','needs_review'].includes(claim.status)?claim:null);
       const operations=jobs.map(job=>team.cancel(job.id));
       if(plan?.turnId)operations.push(team.invoke('agent/abort',[{sessionId:plan.sessionId,turnId:plan.turnId}]));
+      operations.push(team.save());
       for(const result of await Promise.allSettled(operations))if(result.status==='rejected')errors.push(result.reason);
       for(const report of room.reports||[])if(!report.replyDelivered&&!['completed','error','aborted'].includes(report.status)){report.cancelled=true;report.error='用户已停止本群工作。';report.status='aborted';}
       team.log(room,'System','已请求停止本群全部工作；已完成的文件修改不会撤销。',{kind:'notice'});

@@ -3,6 +3,7 @@
 // the encrypted vault, outside team snapshots and ordinary backups.
 const {randomUUID,createHash}=require('node:crypto');
 const {boundedFetch}=require('./net');
+const {AppConnections}=require('./app-connections');
 const BASE='https://backend.composio.dev/api/v3.1';
 const RECORD='COMPOSIO_PROJECT';
 const id=value=>typeof value==='string'&&/^[a-zA-Z0-9_-]{1,160}$/.test(value);
@@ -15,7 +16,7 @@ function logo(value){try{const u=new URL(value);return u.protocol==='https:'&&!u
 const publicId=slug=>'public_'+createHash('sha256').update(slug).digest('hex').slice(0,24);
 function pageQuery(input,limit){const q=new URLSearchParams({limit:String(limit)});if(input.cursor){if(typeof input.cursor!=='string'||input.cursor.length>2000)throw Error('分页标识无效。');q.set('cursor',input.cursor);}return q;}
 class Apps{
-  constructor(team,{transport=boundedFetch}={}){this.team=team;this.transport=transport;this.tail=Promise.resolve();this.controllers=new Set();this.epoch=0;this.closed=false;}
+  constructor(team,{transport=boundedFetch,connectionOptions}={}){this.team=team;this.transport=transport;this.tail=Promise.resolve();this.controllers=new Set();this.epoch=0;this.closed=false;this.connections=new AppConnections(this,connectionOptions);}
   config(){
     if(this.closed||this.team.stopped)throw Error('应用连接已关闭。');
     let value;try{value=this.team.vault.value('@apps',RECORD);}catch(error){if(this.team.vault.error)throw error;return null;}
@@ -24,9 +25,11 @@ class Apps{
   }
   fingerprint(c){return createHash('sha256').update(JSON.stringify(c)).digest('hex');}
   current(c,epoch){if(this.closed||this.team.stopped||epoch!==this.epoch||this.fingerprint(this.config())!==this.fingerprint(c))throw Error('应用连接或 Bot 授权已更改，请重新操作。');}
-  mutate(run){const task=this.tail.catch(()=>{}).then(async()=>{if(this.closed||this.team.stopped)throw Error('应用连接已关闭。');this.epoch++;return run();});this.tail=task.catch(()=>{});return task;}
+  mutate(run){const task=this.tail.catch(()=>{}).then(async()=>{if(this.closed||this.team.stopped)throw Error('应用连接已关闭。');this.epoch++;try{return await run();}finally{if(!this.closed)this.connections.changed();}});this.tail=task.catch(()=>{});return task;}
   async persist(c){if(this.closed||this.team.stopped)throw Error('应用连接已关闭。');await this.team.vault.setApps({name:RECORD,value:JSON.stringify(c)});}
-  status(){const c=this.config();return {configured:!!c,storage:this.team.vault.list().available?'encrypted':'unavailable',grants:(c?.grants||[]).map(g=>({...g,botIds:g.botIds.filter(v=>this.team.state.bots.some(b=>b.id===v))}))};}
+  status(){const c=this.config();return {configured:!!c,storage:this.team.vault.list().available?'encrypted':'unavailable',grants:(c?.grants||[]).map(g=>({...g,botIds:g.botIds.filter(v=>this.team.state.bots.some(b=>b.id===v))})),connection:this.connections.view()};}
+  start(){this.connections.start();}
+  context(botId){try{const grants=this.config()?.grants.filter(g=>g.botIds.includes(botId))||[];return grants.length?'\nApplication accounts assigned to this Bot (saved grants, availability is checked before execution): '+JSON.stringify(grants.slice(0,20).map(g=>({accountId:g.accountId,app:g.slug})))+'. Use list_app_tools to discover their tools, then call_app_tool for user-authorized work. The applications dialog does not need to be opened. Never ask for project keys in chat.\n':'';}catch{return '';}}
   async api(c,path,{method='GET',body,signal,guard}={}){
     if(this.closed||this.team.stopped)throw Error('Composio 连接已关闭。');guard?.();
     const controller=new AbortController(),deadline=AbortSignal.timeout(30000);this.controllers.add(controller);
@@ -68,7 +71,7 @@ class Apps{
       if(!r.next_cursor)return [...new Map(items.map(a=>[a.id,a])).values()];if(seen.has(r.next_cursor))throw Error('应用账号分页未前进，请重试。');seen.add(r.next_cursor);cursor=r.next_cursor;
     }throw Error('应用账号列表超过分页上限。');
   }
-  async inventory(){const c=this.need(),epoch=this.epoch,accounts=await this.accounts(c);this.current(c,epoch);return {accounts,...this.status()};}
+  async inventory(options={}){this.need();return this.connections.refresh(options);}
   async connect(input){return this.mutate(async()=>{
     if(!id(input.slug))throw Error('应用标识无效。');let c=this.need();
     const toolkit=await this.api(c,'/toolkits/'+encodeURIComponent(input.slug));
@@ -99,7 +102,7 @@ class Apps{
   });}
   authorized(c,botId,accountId){this.team.bot(botId);const grant=c.grants.find(g=>g.accountId===accountId&&g.botIds.includes(botId));if(!grant)throw Error('用户没有把该应用账号分配给当前 Bot。');return grant;}
   async tools(botId,input={},signal){
-    const c=this.need(),epoch=this.epoch;if(!input.accountId)return {accounts:c.grants.filter(g=>g.botIds.includes(botId)).map(g=>({id:g.accountId,slug:g.slug}))};
+    this.team.bot(botId);const c=this.need(),epoch=this.epoch;if(!input.accountId)return {accounts:c.grants.filter(g=>g.botIds.includes(botId)).map(g=>({id:g.accountId,slug:g.slug}))};
     const g=this.authorized(c,botId,input.accountId),q=pageQuery(input,10);q.set('toolkit_slug',g.slug);q.set('include_deprecated','false');if(input.query)q.set('query',String(input.query).slice(0,160));const r=await this.api(c,'/tools?'+q,{signal});this.current(c,epoch);this.authorized(this.need(),botId,input.accountId);
     if(!Array.isArray(r.items))throw Error('应用工具列表格式无效。');return {tools:r.items.filter(t=>t.toolkit?.slug===g.slug).slice(0,10).map(t=>({name:t.slug,description:t.description,inputSchema:t.input_parameters,version:t.version})),nextCursor:r.next_cursor||null};
   }
@@ -113,7 +116,7 @@ class Apps{
     // Never expose returned account secrets/session handles to an agent.
     return this.team.vault.clean({data:result.data,...(result.error===undefined?{}:{error:result.error}),successful:result.successful});
   }
-  async operation(input={}){switch(input.action||'status'){case 'status':return this.status();case 'saveKey':return this.saveKey(input);case 'clear':return this.clear();case 'catalog':return this.catalog(input);case 'categories':return this.categories();case 'accounts':return this.inventory();case 'connect':return this.connect(input);case 'grant':return this.grant(input);case 'disconnect':return this.disconnect(input);default:throw Error('未知的应用连接操作。');}}
-  async close(){this.closed=true;this.epoch++;for(const c of this.controllers)c.abort();await this.tail;}
+  async operation(input={}){switch(input.action||'status'){case 'status':return this.status();case 'saveKey':return this.saveKey(input);case 'clear':return this.clear();case 'catalog':return this.catalog(input);case 'categories':return this.categories();case 'accounts':return this.inventory({cached:input.cached===true});case 'connect':return this.connect(input);case 'grant':return this.grant(input);case 'disconnect':return this.disconnect(input);default:throw Error('未知的应用连接操作。');}}
+  async close(){this.closed=true;this.epoch++;this.connections.close();for(const c of this.controllers)c.abort();await this.tail;}
 }
 module.exports={Apps,trustedLink};

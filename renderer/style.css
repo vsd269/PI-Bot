@@ -918,3 +918,7 @@ button.bt-token>.bt-mark{flex:none}
 .pi-working-line{display:flex;align-items:center;gap:8px;min-height:36px;padding-left:8px;max-width:100%}
 .pi-working-line>.bt-mark{flex:none;width:28px;height:28px}.pi-working-label{min-width:0;font-family:inherit;font-size:14px;line-height:22px;color:var(--bt-ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(prefers-reduced-motion:reduce){.pi-new-messages,.pi-tool-step>summary>svg{transition:none}}
+
+.pi-image-expand svg{width:16px;height:16px}
+
+.question-card .bt-q-opt[aria-pressed=true]{background:var(--bt-hover)}
