@@ -33,7 +33,11 @@ PI Bot is an independently maintained adaptation of [DS Bot](https://github.com/
 </table>
 <p align="center"><sub>Click any image to view it full size. All screenshots use the actual plugin interface with simulated chat and memory data. Catalog listings do not indicate completed authorization.</sub></p>
 
-This local repair build is **0.3.110**, based on 0.3.109. Application accounts, categories and the main catalog load independently, with immediate saved content, bounded read waits and retry support. Retains automatic startup checks and all prior fixes. See [release notes](docs/RELEASE-0.3.110.md). Earlier release notes remain below.
+The latest stable release is **0.3.110**, combining fixes from 0.3.108 through 0.3.110. See the [combined release notes](docs/GITHUB-RELEASE-0.3.110.md) and [download the plugin](https://github.com/vsd269/PI-Bot/releases/latest).
+
+## New in 0.3.110
+
+Fixes request expiry during long tasks, improves live output and stop handling, and completes native question cards, coordinator mentions and unread tracking. Saved app connections are checked automatically at startup. Accounts, categories and the catalog load independently, with read timeouts and retries to prevent a blank applications page. Existing Bots, chats, themes, avatars and app assignments are retained. See the [combined notes for all three updates](docs/GITHUB-RELEASE-0.3.110.md).
 
 ## New in 0.3.107
 
